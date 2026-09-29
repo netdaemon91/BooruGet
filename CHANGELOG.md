@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.1 – 2026-09-29
+
+- Added README badges for Windows build status, version, Python requirement, Windows x64, bilingual GUI and provider count.
+- Added a visual separator above the version section in the About dialog so the current BooruGet version is clearly separated from the original-project credit.
+- Rebuilt the Windows package as 2.4.1.
+
 ## 2.4.0 – 2026-09-29
 
 - Added persistent German/English GUI language switching.

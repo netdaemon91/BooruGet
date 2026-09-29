@@ -18,7 +18,7 @@ from urllib3.util.retry import Retry
 from .models import Credentials, Post
 
 
-USER_AGENT = "BooruGet/2.4 (+https://github.com/netdaemon91/BooruGet)"
+USER_AGENT = "BooruGet/2.4.1 (+https://github.com/netdaemon91/BooruGet)"
 
 
 class ProviderError(RuntimeError):
