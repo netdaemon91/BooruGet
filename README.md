@@ -1,90 +1,93 @@
 # BooruGet
 
-**BooruGet** is a modernized continuation of the original Python-based Gelbooru and Danbooru image downloader. The 2026 revival keeps the original CLI idea alive while adding current APIs, a desktop GUI, safer downloads and reproducible Windows builds.
+**BooruGet** is a modernized continuation of the original Python booru image downloader. The 2026 revival keeps the original command-line workflow while adding a desktop GUI, current APIs, multi-booru provider engines, safer downloads and reproducible Windows builds.
 
 > Original project: **fhrach4/BooruGet**  
 > Modernized fork: **netdaemon91/BooruGet**
 
-## What is new in 2.2
+## BooruGet 2.3
 
-- modern **Tkinter desktop GUI**
-- **Dark / Light Mode**
-- named **search presets / favorites**
+BooruGet is now a **multi-booru downloader**. Seven built-in sources share three provider engines instead of seven separate implementations:
+
+| Provider | ID | Engine | Default |
+| --- | --- | --- | --- |
+| Danbooru | `danbooru` | Danbooru API | yes |
+| Gelbooru | `gelbooru` | Gelbooru 0.2 / public HTML fallback | yes |
+| Safebooru | `safebooru` | Gelbooru 0.2 | no |
+| Rule34.xxx | `rule34` | Gelbooru 0.2 / public HTML fallback | no |
+| yande.re | `yandere` | Moebooru | no |
+| Konachan | `konachan` | Moebooru | no |
+| Sakugabooru | `sakugabooru` | Moebooru | no |
+
+The registry architecture makes additional compatible sites much easier to add later.
+
+## GUI
+
+The Tkinter desktop application includes:
+
+- selectable provider checkboxes for all built-in boorus
+- Dark / Light Mode
+- named search presets / favorites, including provider selections
 - queue with per-file status and progress
-- **on-demand image preview** for the selected result
-- direct link to the original Danbooru/Gelbooru post
+- on-demand preview for the selected result
+- direct link to the original post
 - search-only / dry-run mode
 - persistent search history and GUI settings
-- current Danbooru and Gelbooru API handling
-- parallel downloads with retries, timeouts and `.part` files
-- standalone `BooruGet.exe` and `BooruGet-CLI.exe`
-- automated Win64 builds through GitHub Actions
-- automatic GitHub Release publishing for `v*` tags
+- optional Danbooru and Gelbooru credentials
+- parallel downloads with retries, timeouts and atomic `.part` files
 
-## Screens / workflow
-
-1. Enter one or more booru tags.
-2. Optionally load or save a search preset.
-3. Choose Gelbooru, Danbooru or both.
-4. Configure resolution, ratings and limits.
-5. Use **Nur suchen** to preview results without downloading, or **Download starten** to save them.
-6. Select a result in the queue to load its preview and open the canonical post page.
-
-## Requirements when running from source
-
-- Python 3.10+
-- `requests`
-- `Pillow`
+Start from source:
 
 ```powershell
 py -3 -m pip install -r requirements.txt
-```
-
-Then start the GUI:
-
-```powershell
 py -3 BooruGet-GUI.py
-```
-
-or:
-
-```powershell
-py -3 BooruGet.py --gui
 ```
 
 On Windows, `start_gui.bat` can also be launched by double-clicking it.
 
 ## Command line
 
-Basic search:
+The historical default remains Danbooru + Gelbooru:
 
 ```powershell
 py -3 BooruGet.py landscape sunset
 ```
 
-Gelbooru only, maximum 50 accepted posts:
+Choose individual providers:
 
 ```powershell
-py -3 BooruGet.py landscape --gelbooru-only --max-results 50
+py -3 BooruGet.py landscape --providers safebooru yandere sakugabooru
 ```
 
-Approximately 1920×1080:
+Search all built-in providers:
 
 ```powershell
-py -3 BooruGet.py landscape --width 1920 --height 1080
+py -3 BooruGet.py landscape --all-providers
 ```
 
-Search without downloading:
+List provider IDs:
 
 ```powershell
-py -3 BooruGet.py landscape --dry-run --max-pages 1 --verbose
+py -3 BooruGet.py --list-providers
 ```
 
-The most important legacy switches remain supported, including `--nodan`, `--nogel`, `--nsfw`, `--anysize`, `--width`, `--height` and `--error`.
+Dry-run:
+
+```powershell
+py -3 BooruGet.py landscape --providers yandere konachan --dry-run --max-pages 1 --verbose
+```
+
+The important legacy switches remain supported, including `--nodan`, `--nogel`, `--danbooru-only`, `--gelbooru-only`, `--nsfw`, `--anysize`, `--width`, `--height` and `--error`.
+
+## Ratings and adult content
+
+By default, BooruGet only accepts posts normalized as **general/safe**. Enable **NSFW erlauben** in the GUI or `--nsfw` on the command line to allow all ratings.
+
+Provider availability does not override the rating filter: selecting a source that mainly contains adult-rated posts may therefore produce few or no accepted results until NSFW ratings are enabled.
 
 ## API credentials
 
-Copy `booruget.ini.example` to `booruget.ini` if you want to provide credentials manually:
+Danbooru and Gelbooru credentials are optional for normal public use:
 
 ```ini
 [danbooru]
@@ -96,70 +99,71 @@ user_id = YOUR_USER_ID
 api_key = YOUR_API_KEY
 ```
 
-These credentials are optional for normal public searches. Danbooru supports anonymous public read requests. BooruGet also attempts Gelbooru anonymously and automatically falls back to its public HTML pages when Gelbooru temporarily requires DAPI authentication. Credentials can still be useful for account-specific access and API limits.\n\nThe GUI can save these values. On Windows, its normal user configuration directory is:
+Danbooru public reads work anonymously. Gelbooru is attempted anonymously first and BooruGet can fall back to its public HTML listing/post pages when anonymous DAPI access is unavailable.
+
+The additional 2.3 providers currently run anonymously. Rule34.xxx can require API authentication for its DAPI; BooruGet therefore falls back to its public site when anonymous API access is refused.
+
+On Windows, GUI configuration is normally stored under:
 
 ```text
 %APPDATA%\BooruGet\
 ```
 
-API keys are stored as plain text in the INI file. Treat that file like a password-bearing configuration file.
+API keys are stored as plain text in the INI file.
+
+## Provider architecture
+
+`booruget/providers.py` contains a provider registry and shared engines:
+
+- **DanbooruProvider** for Danbooru-style `posts.json`
+- **GelbooruV02Provider** for Gelbooru/Safebooru/Rule34-style DAPI
+- **MoebooruProvider** for yande.re/Konachan/Sakugabooru `post.json`
+
+Each site is described by a small `ProviderSpec` with its label, family, public URL and API URL. This is the intended extension point for future boorus.
 
 ## Windows EXE build
 
-On a 64-bit Windows machine with Python installed, run:
+On a 64-bit Windows machine with Python installed:
 
 ```text
 build_windows.bat
 ```
 
-The build script creates an isolated build environment, runs the test suite and produces:
+The build produces:
 
 ```text
-release\BooruGet-2.2.2-win64\BooruGet.exe
-release\BooruGet-2.2.2-win64\BooruGet-CLI.exe
-release\BooruGet-2.2.2-win64.zip
+release\BooruGet-2.3.0-win64\BooruGet.exe
+release\BooruGet-2.3.0-win64\BooruGet-CLI.exe
+release\BooruGet-2.3.0-win64.zip
 ```
 
-The resulting executables do **not** require a separate Python installation.
+The executables do not require a separate Python installation.
 
-PyInstaller is not a cross-compiler, so Windows executables should be built on Windows.
+The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.3.0` publish the ZIP as a GitHub Release.
 
-## GitHub Actions
+## Download safety / reliability
 
-The repository includes `.github/workflows/build-windows.yml`.
-
-- pushes to `master`, `main` and `modernize/**` run a Win64 build
-- manual runs are available through **Actions → Build Windows EXE**
-- the release ZIP is uploaded as a workflow artifact
-- pushing a tag such as `v2.2.2` creates a GitHub Release and attaches the Win64 ZIP automatically
-
-## Modern API fixes
-
-Compared with the historical version, the modernized codebase includes:
+The modernized downloader includes:
 
 - HTTPS endpoints
-- current Danbooru `posts.json` parsing and direct use of `file_url`
-- Danbooru username/API-key authentication
-- current Gelbooru DAPI parameters with optional `user_id` + `api_key`
-- Gelbooru JSON parsing with XML fallback
-- correct modern Danbooru rating semantics (`g/s/q/e`)
-- request retries/backoff and explicit timeouts
+- retry/backoff and explicit timeouts
 - bounded parallel download queue
+- per-target locking so duplicate images returned by multiple providers cannot corrupt the same `.part` file
 - Windows-safe output directory names
 - existing-file detection
 - atomic `.part` downloads
+- current Danbooru rating semantics
+- provider-specific Referer handling
 
 ## Legacy blacklist compatibility
 
-These historical files are still recognized when present:
+These historical files are still recognized:
 
 - `.config/global_blacklist`
 - `.config/nsfw_blacklist`
 - `.config/md5_global_blacklist`
 - `.config/md5_nsfw_blacklist`
 - `.config/md5_nsfw_whitelist`
-
-Each line represents one tag or MD5 value.
 
 ## Tests
 
@@ -169,11 +173,10 @@ py -3 -m unittest discover -s tests -v
 
 ## Project history and credits
 
-BooruGet was originally created by **fhrach4** and developed as a Python booru downloader. The historical README already listed a GUI as a planned feature; this fork continues that idea while updating the APIs and packaging for current systems.
+BooruGet was originally created by **fhrach4**. The historical README already listed a GUI as a planned feature; this fork continues that idea while updating APIs, packaging and the provider architecture for current systems.
 
 - Original author/project: [fhrach4/BooruGet](https://github.com/fhrach4/BooruGet)
 - Original history is preserved through the GitHub fork relationship.
-- The historical source remains available on the untouched `master` history and through the original upstream repository.
 - Modernization and continued development from 2026: **NetDaemon / netdaemon91**.
 
 Thanks also to the contributors present in the original repository history.
@@ -186,19 +189,17 @@ See [`NOTICE.md`](NOTICE.md) for the project-history and licensing-status notice
 
 ## Project layout
 
-- `booruget/` – modernized application package
+- `booruget/providers.py` – provider registry and shared engines
+- `booruget/` – application package
 - `assets/` – application icon and GUI assets
 - `BooruGet-GUI.py` – GUI entry point
 - `BooruGet.py` – CLI / combined entry point
 - `build_windows.bat` / `build_windows.ps1` – reproducible Windows build
 - `.github/workflows/build-windows.yml` – Win64 CI/release build
 - `tests/` – unit tests
-- Git history / `master` – preserved historical upstream source
 
 ## Recommended first live test
 
-Because API availability and account permissions are external, begin with a small dry-run:
-
 ```powershell
-py -3 BooruGet.py landscape --dry-run --max-pages 1 --verbose
+py -3 BooruGet.py landscape --providers safebooru yandere --dry-run --max-pages 1 --verbose
 ```
