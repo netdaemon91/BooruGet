@@ -1,5 +1,12 @@
 # BooruGet
 
+[![Windows Build](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml/badge.svg)](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml)
+![Version](https://img.shields.io/badge/version-2.4.1-blue)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)
+![GUI](https://img.shields.io/badge/GUI-DE%20%7C%20EN-2ea44f)
+![Boorus](https://img.shields.io/badge/Boorus-7-purple)
+
 **BooruGet** is a modernized continuation of the original Python booru image downloader. The 2026 revival keeps the original command-line workflow while adding a desktop GUI, current APIs, multi-booru provider engines, safer downloads and reproducible Windows builds.
 
 > Original project: **fhrach4/BooruGet**  
@@ -136,14 +143,14 @@ build_windows.bat
 The build produces:
 
 ```text
-release\BooruGet-2.4.0-win64\BooruGet.exe
-release\BooruGet-2.4.0-win64\BooruGet-CLI.exe
-release\BooruGet-2.4.0-win64.zip
+release\BooruGet-2.4.1-win64\BooruGet.exe
+release\BooruGet-2.4.1-win64\BooruGet-CLI.exe
+release\BooruGet-2.4.1-win64.zip
 ```
 
 The executables do not require a separate Python installation.
 
-The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.4.0` publish the ZIP as a GitHub Release.
+The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.4.1` publish the ZIP as a GitHub Release.
 
 ## Download safety / reliability
 

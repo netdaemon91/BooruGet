@@ -1620,24 +1620,33 @@ class BooruGetGUI(tk.Tk):
             ABOUT_LINKS["original_project"],
         )
 
+        ttk.Separator(
+            frame,
+            orient="horizontal",
+        ).grid(
+            row=9,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=12,
+        )
+
         ttk.Label(
             frame,
             text=self._t("about.version"),
         ).grid(
-            row=9,
+            row=10,
             column=0,
             sticky="w",
-            pady=(12, 0),
         )
         ttk.Label(
             frame,
             text=__version__,
         ).grid(
-            row=9,
+            row=10,
             column=1,
             sticky="w",
             padx=(12, 0),
-            pady=(12, 0),
         )
 
         ttk.Button(
@@ -1645,7 +1654,7 @@ class BooruGetGUI(tk.Tk):
             text=self._t("about.close"),
             command=window.destroy,
         ).grid(
-            row=10,
+            row=11,
             column=0,
             columnspan=2,
             sticky="e",
