@@ -1,0 +1,335 @@
+from __future__ import annotations
+
+import queue
+import subprocess
+import sys
+import threading
+import tkinter as tk
+import webbrowser
+from io import BytesIO
+from pathlib import Path
+from tkinter import filedialog, messagebox, simpledialog, ttk
+
+import requests
+from PIL import Image, ImageTk
+
+from . import __version__
+from .config import DEFAULT_CONFIG, default_gui_download_dir, load_credentials, load_gui_settings, resolve_config_path, save_credentials, save_gui_settings
+from .downloader import DownloadRunner
+from .models import Credentials, Post, SearchOptions
+from .providers import USER_AGENT
+
+
+class BooruGetGUI(tk.Tk):
+    MAX_ROWS = 500
+    PREVIEW_SIZE = (380, 420)
+
+    def __init__(self, config_path: str = DEFAULT_CONFIG):
+        super().__init__()
+        self.title(f"BooruGet {__version__}")
+        self.geometry("1120x800")
+        self.minsize(900, 650)
+        self.config_path = resolve_config_path(config_path)
+        self.credentials = load_credentials(config_path)
+        self.settings = load_gui_settings()
+        self.events: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.cancel_event = threading.Event()
+        self.worker: threading.Thread | None = None
+        self.items: dict[str, str] = {}
+        self.posts: dict[str, Post] = {}
+        self.preview_photo: ImageTk.PhotoImage | None = None
+        self.preview_key = ""
+        self.selected_post: Post | None = None
+        self.last_destination: Path | None = None
+        self.presets: dict[str, dict] = {}
+        self.style = ttk.Style(self)
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        self._set_icon()
+        self._build()
+        self._restore()
+        self._apply_theme()
+        self.after(100, self._pump)
+
+    @staticmethod
+    def _resource(*parts: str) -> Path:
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+        return base.joinpath(*parts)
+
+    def _set_icon(self) -> None:
+        path = self._resource("assets", "booruget.png")
+        if path.exists():
+            try:
+                self._icon = tk.PhotoImage(file=str(path))
+                self.iconphoto(True, self._icon)
+            except tk.TclError:
+                pass
+
+    def _build(self) -> None:
+        root = ttk.Frame(self, padding=12)
+        root.pack(fill="both", expand=True)
+        root.columnconfigure(1, weight=1)
+        root.rowconfigure(8, weight=1)
+
+        head = ttk.Frame(root)
+        head.grid(row=0, column=0, columnspan=5, sticky="ew", pady=(0, 8))
+        head.columnconfigure(0, weight=1)
+        ttk.Label(head, text="BooruGet", font=("Segoe UI", 18, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(head, text=f"v{__version__} · Gelbooru + Danbooru").grid(row=1, column=0, sticky="w")
+        self.status = tk.StringVar(value="Bereit")
+        ttk.Label(head, textvariable=self.status).grid(row=0, column=1, rowspan=2, padx=10)
+        self.theme = tk.StringVar(value="dark")
+        self.theme_btn = ttk.Button(head, command=self._toggle_theme, width=10)
+        self.theme_btn.grid(row=0, column=2, rowspan=2)
+
+        self.tags = tk.StringVar()
+        self.output = tk.StringVar(value=str(default_gui_download_dir()))
+        self.preset = tk.StringVar()
+        self._entry_row(root, 1, "Tags", self.tags, combo=True)
+
+        ttk.Label(root, text="Preset").grid(row=2, column=0, sticky="w")
+        self.preset_box = ttk.Combobox(root, textvariable=self.preset, state="readonly")
+        self.preset_box.grid(row=2, column=1, columnspan=2, sticky="ew", pady=4)
+        self.preset_box.bind("<<ComboboxSelected>>", self._load_preset)
+        ttk.Button(root, text="★ Speichern", command=self._save_preset).grid(row=2, column=3, padx=(8, 0), sticky="ew")
+        ttk.Button(root, text="Entfernen", command=self._delete_preset).grid(row=2, column=4, padx=(8, 0), sticky="ew")
+
+        ttk.Label(root, text="Ausgabe").grid(row=3, column=0, sticky="w")
+        ttk.Entry(root, textvariable=self.output).grid(row=3, column=1, columnspan=2, sticky="ew", pady=4)
+        ttk.Button(root, text="Ordner…", command=self._choose_output).grid(row=3, column=3, padx=(8, 0), sticky="ew")
+        ttk.Button(root, text="Öffnen", command=self._open_output).grid(row=3, column=4, padx=(8, 0), sticky="ew")
+
+        opts = ttk.LabelFrame(root, text="Suche", padding=8)
+        opts.grid(row=4, column=0, columnspan=5, sticky="ew", pady=6)
+        self.use_gel = tk.BooleanVar(value=True); self.use_dan = tk.BooleanVar(value=True)
+        self.any_size = tk.BooleanVar(value=True); self.allow_nsfw = tk.BooleanVar(value=False)
+        self.width = tk.StringVar(value="1920"); self.height = tk.StringVar(value="1080")
+        self.max_results = tk.StringVar(value="0"); self.max_pages = tk.StringVar(value="0"); self.workers = tk.StringVar(value="4")
+        ttk.Checkbutton(opts, text="Gelbooru", variable=self.use_gel).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(opts, text="Danbooru", variable=self.use_dan).grid(row=0, column=1, sticky="w")
+        ttk.Checkbutton(opts, text="Beliebige Auflösung", variable=self.any_size).grid(row=0, column=2, sticky="w", padx=10)
+        ttk.Checkbutton(opts, text="NSFW erlauben", variable=self.allow_nsfw).grid(row=0, column=3, sticky="w")
+        for col, (label, var) in enumerate((("Breite", self.width), ("Höhe", self.height), ("Max. Ergebnisse", self.max_results), ("Max. Seiten", self.max_pages), ("Parallel", self.workers))):
+            ttk.Label(opts, text=label).grid(row=1, column=col * 2, sticky="e", pady=(7, 0))
+            ttk.Entry(opts, width=8, textvariable=var).grid(row=1, column=col * 2 + 1, padx=(4, 12), pady=(7, 0))
+
+        creds = ttk.LabelFrame(root, text="API-Zugang", padding=8)
+        creds.grid(row=5, column=0, columnspan=5, sticky="ew", pady=6)
+        creds.columnconfigure(1, weight=1); creds.columnconfigure(3, weight=1)
+        self.dan_user = tk.StringVar(value=self.credentials.danbooru_username); self.dan_key = tk.StringVar(value=self.credentials.danbooru_api_key)
+        self.gel_user = tk.StringVar(value=self.credentials.gelbooru_user_id); self.gel_key = tk.StringVar(value=self.credentials.gelbooru_api_key)
+        fields = (("Danbooru User", self.dan_user, False), ("API key", self.dan_key, True), ("Gelbooru User ID", self.gel_user, False), ("API key", self.gel_key, True))
+        for i, (label, var, secret) in enumerate(fields):
+            row, pair = divmod(i, 2); base = pair * 2
+            ttk.Label(creds, text=label).grid(row=row, column=base, sticky="w", pady=2)
+            ttk.Entry(creds, textvariable=var, show="•" if secret else "").grid(row=row, column=base + 1, sticky="ew", padx=(5, 14), pady=2)
+        ttk.Button(creds, text="Speichern", command=self._save_credentials).grid(row=0, column=4, rowspan=2, sticky="ns")
+
+        controls = ttk.Frame(root)
+        controls.grid(row=6, column=0, columnspan=5, sticky="ew", pady=6)
+        self.start_btn = ttk.Button(controls, text="Download starten", command=lambda: self._start(False)); self.start_btn.pack(side="left")
+        self.search_btn = ttk.Button(controls, text="Nur suchen", command=lambda: self._start(True)); self.search_btn.pack(side="left", padx=7)
+        self.cancel_btn = ttk.Button(controls, text="Abbrechen", command=self._cancel, state="disabled"); self.cancel_btn.pack(side="left")
+        ttk.Button(controls, text="Liste leeren", command=self._clear).pack(side="right")
+
+        prog = ttk.Frame(root); prog.grid(row=7, column=0, columnspan=5, sticky="ew")
+        prog.columnconfigure(0, weight=1)
+        self.progress = ttk.Progressbar(prog, mode="indeterminate"); self.progress.grid(row=0, column=0, sticky="ew")
+        self.stats = tk.StringVar(value="Gesehen 0 · Akzeptiert 0 · Gespeichert 0 · Fehler 0")
+        ttk.Label(prog, textvariable=self.stats).grid(row=0, column=1, padx=(10, 0))
+
+        book = ttk.Notebook(root); book.grid(row=8, column=0, columnspan=5, sticky="nsew", pady=(7, 0))
+        queue_tab = ttk.Frame(book, padding=5); log_tab = ttk.Frame(book, padding=5)
+        book.add(queue_tab, text="Queue / Status"); book.add(log_tab, text="Log")
+        queue_tab.rowconfigure(0, weight=1); queue_tab.columnconfigure(0, weight=1)
+        pane = ttk.Panedwindow(queue_tab, orient="horizontal"); pane.grid(row=0, column=0, sticky="nsew")
+        left = ttk.Frame(pane); right = ttk.LabelFrame(pane, text="Vorschau", padding=7); pane.add(left, weight=3); pane.add(right, weight=2)
+        left.rowconfigure(0, weight=1); left.columnconfigure(0, weight=1); right.rowconfigure(0, weight=1); right.columnconfigure(0, weight=1)
+        cols = ("provider", "id", "size", "rating", "status", "progress")
+        self.queue_view = ttk.Treeview(left, columns=cols, show="headings", selectmode="browse")
+        labels = ("Quelle", "Post", "Auflösung", "Rating", "Status", "Fortschritt")
+        for col, label in zip(cols, labels): self.queue_view.heading(col, text=label)
+        for col, width in zip(cols, (80, 95, 95, 75, 165, 80)): self.queue_view.column(col, width=width, anchor="w")
+        self.queue_view.grid(row=0, column=0, sticky="nsew"); self.queue_view.bind("<<TreeviewSelect>>", self._select)
+        sb = ttk.Scrollbar(left, orient="vertical", command=self.queue_view.yview); sb.grid(row=0, column=1, sticky="ns"); self.queue_view.configure(yscrollcommand=sb.set)
+        self.preview_label = ttk.Label(right, text="Post auswählen", anchor="center"); self.preview_label.grid(row=0, column=0, sticky="nsew")
+        self.preview_info = tk.StringVar(); ttk.Label(right, textvariable=self.preview_info, wraplength=360, justify="left").grid(row=1, column=0, sticky="ew", pady=6)
+        self.open_post_btn = ttk.Button(right, text="Originalpost im Browser öffnen", command=self._open_post, state="disabled"); self.open_post_btn.grid(row=2, column=0, sticky="ew")
+        log_tab.rowconfigure(0, weight=1); log_tab.columnconfigure(0, weight=1)
+        self.log = tk.Text(log_tab, wrap="word", borderwidth=0); self.log.grid(row=0, column=0, sticky="nsew")
+
+    @staticmethod
+    def _entry_row(root, row: int, label: str, var: tk.StringVar, combo: bool = False) -> None:
+        ttk.Label(root, text=label).grid(row=row, column=0, sticky="w")
+        widget = ttk.Combobox(root, textvariable=var) if combo else ttk.Entry(root, textvariable=var)
+        widget.grid(row=row, column=1, columnspan=4, sticky="ew", pady=4)
+        if combo: widget.bind("<Return>", lambda _e: root.winfo_toplevel()._start(False))
+        root.winfo_toplevel().tags_box = widget if combo else getattr(root.winfo_toplevel(), "tags_box", None)
+
+    def _apply_theme(self) -> None:
+        dark = self.theme.get() == "dark"
+        bg, fg, field, accent = (("#171a1f", "#e8e8e8", "#242932", "#3b82f6") if dark else ("#f4f5f7", "#202124", "#ffffff", "#2563eb"))
+        self.configure(bg=bg); self.option_add("*Text.background", field); self.option_add("*Text.foreground", fg)
+        self.style.theme_use("clam")
+        self.style.configure(".", background=bg, foreground=fg, fieldbackground=field)
+        self.style.configure("TEntry", fieldbackground=field); self.style.configure("TCombobox", fieldbackground=field)
+        self.style.map("TCombobox", fieldbackground=[("readonly", field)], foreground=[("readonly", fg)])
+        self.style.configure("Treeview", background=field, foreground=fg, fieldbackground=field); self.style.map("Treeview", background=[("selected", accent)])
+        self.log.configure(bg=field, fg=fg, insertbackground=fg)
+        self.theme_btn.configure(text="☀ Light" if dark else "☾ Dark")
+
+    def _toggle_theme(self) -> None:
+        self.theme.set("light" if self.theme.get() == "dark" else "dark"); self._apply_theme(); self._save_settings()
+
+    def _restore(self) -> None:
+        s = self.settings
+        self.output.set(str(s.get("output", self.output.get()))); self.use_gel.set(bool(s.get("use_gelbooru", True))); self.use_dan.set(bool(s.get("use_danbooru", True)))
+        self.any_size.set(bool(s.get("any_size", True))); self.allow_nsfw.set(bool(s.get("allow_nsfw", False)))
+        for var, key, default in ((self.width,"width","1920"),(self.height,"height","1080"),(self.max_results,"max_results","0"),(self.max_pages,"max_pages","0"),(self.workers,"workers","4")): var.set(str(s.get(key, default)))
+        self.theme.set(str(s.get("theme", "dark")) if str(s.get("theme", "dark")) in {"dark","light"} else "dark")
+        hist = s.get("history", []); self.tags_box["values"] = hist[:25] if isinstance(hist, list) else []
+        raw = s.get("presets", {}); self.presets = raw if isinstance(raw, dict) else {}; self._refresh_presets()
+        geom = s.get("geometry")
+        if isinstance(geom, str) and "x" in geom:
+            try: self.geometry(geom)
+            except tk.TclError: pass
+
+    def _settings(self) -> dict:
+        history = list(self.tags_box["values"]); current = self.tags.get().strip()
+        if current: history = [current] + [x for x in history if x != current]
+        return {"history":history[:25], "presets":self.presets, "output":self.output.get().strip(), "use_gelbooru":self.use_gel.get(), "use_danbooru":self.use_dan.get(), "any_size":self.any_size.get(), "allow_nsfw":self.allow_nsfw.get(), "width":self.width.get(), "height":self.height.get(), "max_results":self.max_results.get(), "max_pages":self.max_pages.get(), "workers":self.workers.get(), "theme":self.theme.get(), "geometry":self.geometry()}
+
+    def _save_settings(self) -> None:
+        try: save_gui_settings(self._settings())
+        except OSError: pass
+        self.tags_box["values"] = self._settings()["history"]
+
+    def _preset_data(self) -> dict:
+        return {k:v.get() for k,v in {"tags":self.tags,"use_gelbooru":self.use_gel,"use_danbooru":self.use_dan,"any_size":self.any_size,"allow_nsfw":self.allow_nsfw,"width":self.width,"height":self.height,"max_results":self.max_results,"max_pages":self.max_pages,"workers":self.workers}.items()}
+
+    def _refresh_presets(self) -> None: self.preset_box["values"] = sorted(self.presets, key=str.casefold)
+    def _save_preset(self) -> None:
+        name = simpledialog.askstring("Preset speichern", "Name des Suchpresets:", initialvalue=self.preset.get() or self.tags.get()[:40], parent=self)
+        if name and name.strip(): self.presets[name.strip()[:80]] = self._preset_data(); self.preset.set(name.strip()[:80]); self._refresh_presets(); self._save_settings()
+    def _delete_preset(self) -> None:
+        name = self.preset.get()
+        if name in self.presets and messagebox.askyesno("Preset entfernen", f"Preset '{name}' entfernen?", parent=self): del self.presets[name]; self.preset.set(""); self._refresh_presets(); self._save_settings()
+    def _load_preset(self, _e=None) -> None:
+        data = self.presets.get(self.preset.get(), {})
+        mapping = {"tags":self.tags,"use_gelbooru":self.use_gel,"use_danbooru":self.use_dan,"any_size":self.any_size,"allow_nsfw":self.allow_nsfw,"width":self.width,"height":self.height,"max_results":self.max_results,"max_pages":self.max_pages,"workers":self.workers}
+        for key, var in mapping.items():
+            if key in data: var.set(data[key])
+
+    def _credentials(self) -> Credentials: return Credentials(self.dan_user.get().strip(), self.dan_key.get().strip(), self.gel_user.get().strip(), self.gel_key.get().strip())
+    def _save_credentials(self) -> None:
+        try: path = save_credentials(self._credentials(), self.config_path); self.status.set(f"API-Zugang gespeichert: {path}")
+        except OSError as exc: messagebox.showerror("BooruGet", str(exc), parent=self)
+    def _choose_output(self) -> None:
+        path = filedialog.askdirectory(initialdir=self.output.get() or str(Path.home()), parent=self)
+        if path: self.output.set(path)
+    def _open_output(self) -> None:
+        path = self.last_destination or Path(self.output.get()).expanduser(); path.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "win32": __import__("os").startfile(str(path))
+        elif sys.platform == "darwin": subprocess.Popen(["open", str(path)])
+        else: subprocess.Popen(["xdg-open", str(path)])
+
+    def _options(self, dry: bool) -> SearchOptions | None:
+        tags = self.tags.get().strip()
+        if not tags: messagebox.showwarning("BooruGet", "Bitte mindestens einen Tag eingeben.", parent=self); return None
+        if not (self.use_gel.get() or self.use_dan.get()): messagebox.showwarning("BooruGet", "Mindestens eine Quelle aktivieren.", parent=self); return None
+        try: width, height, results, pages, workers = map(int, (self.width.get(), self.height.get(), self.max_results.get(), self.max_pages.get(), self.workers.get()))
+        except ValueError: messagebox.showerror("BooruGet", "Breite, Höhe und Limits müssen ganze Zahlen sein.", parent=self); return None
+        return SearchOptions(tags=tags, output_dir=self.output.get().strip() or "downloads", use_danbooru=self.use_dan.get(), use_gelbooru=self.use_gel.get(), any_size=self.any_size.get(), target_width=width, target_height=height, allow_nsfw=self.allow_nsfw.get(), max_results=max(0,results), max_pages=max(0,pages), workers=max(1,min(16,workers)), dry_run=dry)
+
+    def _start(self, dry: bool) -> None:
+        if self.worker and self.worker.is_alive(): return
+        options = self._options(dry)
+        if not options: return
+        self._save_settings(); self.cancel_event.clear(); self.progress.start(12); self.start_btn.configure(state="disabled"); self.search_btn.configure(state="disabled"); self.cancel_btn.configure(state="normal"); self.status.set("Suche läuft…" if dry else "Download läuft…")
+        def work():
+            try: DownloadRunner(options, self._credentials(), log=lambda s:self.events.put(("log",s)), cancel_event=self.cancel_event, event_callback=lambda e,p:self.events.put((e,p))).run()
+            except Exception as exc: self.events.put(("log",f"ERROR: {exc}")); self.events.put(("fatal",str(exc)))
+            finally: self.events.put(("done",None))
+        self.worker = threading.Thread(target=work, daemon=True); self.worker.start()
+
+    def _cancel(self) -> None: self.cancel_event.set(); self.status.set("Abbruch angefordert…")
+    def _key(self, post: Post) -> str: return f"{post.provider}:{post.post_id}"
+    def _row(self, post: Post, status: str = "") -> str | None:
+        key = self._key(post); item = self.items.get(key)
+        if item and self.queue_view.exists(item): return item
+        if len(self.items) >= self.MAX_ROWS: return None
+        item = self.queue_view.insert("", "end", values=(post.provider, post.post_id, f"{post.width}×{post.height}", post.rating, status, "")); self.items[key]=item; self.posts[item]=post; return item
+    def _set_row(self, post: Post, status: str | None=None, progress: str | None=None) -> None:
+        item = self._row(post, status or "")
+        if not item: return
+        values = list(self.queue_view.item(item,"values"))
+        if status is not None: values[4]=status
+        if progress is not None: values[5]=progress
+        self.queue_view.item(item, values=values)
+    def _update_stats(self, d: dict | None) -> None:
+        if d: self.stats.set(f"Gesehen {d.get('seen',0)} · Akzeptiert {d.get('accepted',0)} · Gespeichert {d.get('downloaded',0)} · Fehler {d.get('failed',0)}")
+
+    def _runner_event(self, event: str, p: dict) -> None:
+        self._update_stats(p.get("stats")); post = p.get("post")
+        if event == "destination": self.last_destination = Path(p["path"])
+        elif event == "searching": self.status.set(f"Suche: {p.get('provider','')}")
+        elif isinstance(post, Post):
+            states = {"post_accepted":("Akzeptiert",None),"download_queued":("In Queue","0 %"),"download_started":("Download","0 %"),"download_finished":("Gespeichert","100 %"),"download_exists":("Bereits vorhanden","100 %"),"download_failed":("Fehler","—"),"download_cancelled":("Abgebrochen","—"),"dry_run":("Gefunden (Dry-run)","—")}
+            if event == "download_progress": self._set_row(post,"Download",f"{int(p.get('percent') or 0)} %" if p.get("total") else f"{int(p.get('received') or 0)//1024} KiB")
+            elif event in states: self._set_row(post,*states[event])
+        if event == "run_finished": self.status.set("Abgebrochen" if p.get("cancelled") else "Fertig")
+        elif event == "provider_error": self.status.set(f"API-Fehler: {p.get('provider','')}")
+
+    def _select(self, _e=None) -> None:
+        sel = self.queue_view.selection(); post = self.posts.get(sel[0]) if sel else None
+        if not post: return
+        self.selected_post = post; self.open_post_btn.configure(state="normal" if post.post_url else "disabled")
+        tags = " ".join(post.tags.split()); tags = tags if len(tags) <= 180 else tags[:179] + "…"
+        self.preview_info.set(f"{post.provider.title()} #{post.post_id} · {post.width}×{post.height} · Rating {post.rating or '—'}\nTags: {tags}")
+        self._load_preview(post)
+
+    def _load_preview(self, post: Post) -> None:
+        key = self._key(post); self.preview_key = key; self.preview_photo = None; self.preview_label.configure(image="", text="Vorschau wird geladen…")
+        url = post.preview_url or post.file_url
+        if not url: self.preview_label.configure(text="Keine Vorschau verfügbar"); return
+        def work():
+            try:
+                ref = "https://danbooru.donmai.us/" if post.provider == "danbooru" else "https://gelbooru.com/"
+                r = requests.get(url, headers={"User-Agent":USER_AGENT,"Referer":ref}, timeout=(8,25)); r.raise_for_status()
+                if len(r.content) > 15*1024*1024: raise ValueError("preview too large")
+                self.events.put(("preview", {"key":key,"data":r.content}))
+            except Exception as exc: self.events.put(("preview_error", {"key":key,"error":str(exc)}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_preview(self, p: dict) -> None:
+        if p.get("key") != self.preview_key: return
+        try:
+            image = Image.open(BytesIO(p["data"])); image.thumbnail(self.PREVIEW_SIZE, Image.Resampling.LANCZOS)
+            if image.mode not in {"RGB","RGBA"}: image=image.convert("RGBA")
+            self.preview_photo=ImageTk.PhotoImage(image); self.preview_label.configure(image=self.preview_photo,text="")
+        except Exception: self.preview_label.configure(image="",text="Vorschau nicht verfügbar")
+    def _open_post(self) -> None:
+        if self.selected_post and self.selected_post.post_url: webbrowser.open(self.selected_post.post_url,new=2)
+
+    def _pump(self) -> None:
+        try:
+            while True:
+                event, payload = self.events.get_nowait()
+                if event == "log": self.log.insert("end",str(payload)+"\n"); self.log.see("end")
+                elif event == "done": self.progress.stop(); self.start_btn.configure(state="normal"); self.search_btn.configure(state="normal"); self.cancel_btn.configure(state="disabled"); self.status.set("Bereit" if self.status.get() not in {"Fertig","Abgebrochen"} else self.status.get())
+                elif event == "fatal": self.status.set("Fehler")
+                elif event == "preview": self._show_preview(payload)
+                elif event == "preview_error" and payload.get("key") == self.preview_key: self.preview_label.configure(image="",text="Vorschau nicht verfügbar")
+                elif isinstance(payload, dict): self._runner_event(event,payload)
+        except queue.Empty: pass
+        self.after(100,self._pump)
+
+    def _clear(self) -> None:
+        for item in self.queue_view.get_children(): self.queue_view.delete(item)
+        self.items.clear(); self.posts.clear(); self.selected_post=None; self.preview_key=""; self.preview_photo=None; self.preview_label.configure(image="",text="Post auswählen"); self.preview_info.set(""); self.open_post_btn.configure(state="disabled")
+    def _close(self) -> None:
+        if self.worker and self.worker.is_alive() and not messagebox.askyesno("BooruGet schließen","Ein Download läuft noch. Abbrechen und schließen?",parent=self): return
+        self.cancel_event.set(); self._save_settings(); self.destroy()
+
+
+def launch_gui(config_path: str = DEFAULT_CONFIG) -> None:
+    BooruGetGUI(config_path).mainloop()

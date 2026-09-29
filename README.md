@@ -1,76 +1,204 @@
 # BooruGet
-## About
-This project downlads files from danbooru and gelbooru. It can run on all operating systems, but requires httplib2 to be installed. This is generally not installed on a default python3 install
 
-* This program is still very much in devlopment and is not very user friendly yet.
+**BooruGet** is a modernized continuation of the original Python-based Gelbooru and Danbooru image downloader. The 2026 revival keeps the original CLI idea alive while adding current APIs, a desktop GUI, safer downloads and reproducible Windows builds.
 
-## Installation
-BooruGet  will create all required files/folders on first run.
+> Original project: **fhrach4/BooruGet**  
+> Modernized fork: **netdaemon91/BooruGet**
 
-### Dependencies
-* python3
-* httplib2
+## What is new in 2.2
 
-## Configuration
-All configuration files are stored in .config
+- modern **Tkinter desktop GUI**
+- **Dark / Light Mode**
+- named **search presets / favorites**
+- queue with per-file status and progress
+- **on-demand image preview** for the selected result
+- direct link to the original Danbooru/Gelbooru post
+- search-only / dry-run mode
+- persistent search history and GUI settings
+- current Danbooru and Gelbooru API handling
+- parallel downloads with retries, timeouts and `.part` files
+- standalone `BooruGet.exe` and `BooruGet-CLI.exe`
+- automated Win64 builds through GitHub Actions
+- automatic GitHub Release publishing for `v*` tags
 
-### BooruGet.config
-Currently there are three settings
-`username`, `apikey`, and `out_dir`
+## Screens / workflow
 
-* Username is your username
-* Apikey is your apikey for Danbooru. If you do not have a danbooru account you can leave this blank and use `--nodan` to exclude danbooru from searches
- * Gelbooru does not require an api key
-* out_dir is the directory to output files to. Each search will create a directory with the name of the search as a folder. E.G. searching for test will put results in src/test
+1. Enter one or more booru tags.
+2. Optionally load or save a search preset.
+3. Choose Gelbooru, Danbooru or both.
+4. Configure resolution, ratings and limits.
+5. Use **Nur suchen** to preview results without downloading, or **Download starten** to save them.
+6. Select a result in the queue to load its preview and open the canonical post page.
 
-### Black and White List Configuration
-All files under this category should have each entry on it's own line.
-For example:
+## Requirements when running from source
 
-something<br />
-someOtherThing<br />
-someDifferentThing
+- Python 3.10+
+- `requests`
+- `Pillow`
 
-#### nsfw_blacklist
-Enter tags that should not be downloaded unless nsfw images are allowed
+```powershell
+py -3 -m pip install -r requirements.txt
+```
 
-#### global_blacklist
-Enter tags that never should be downloaded even if nsfw images are allowed
+Then start the GUI:
 
-#### md5_global_blacklist
-Enter the md5 hash of a file that should never be downloaded
+```powershell
+py -3 BooruGet-GUI.py
+```
 
-#### md5_nsfw_blacklist
-Enter the md5 hash of a file that should only be downloaded if nsfw images are allowed
+or:
 
-#### md5_nsfw_whitelist
-Enter the md5 hash of a file that should be downloaded if nsfw images are not allowed
+```powershell
+py -3 BooruGet.py --gui
+```
 
-### md5_global_whitelist
-Enter the md5 hash of a file that should always be downloaded
+On Windows, `start_gui.bat` can also be launched by double-clicking it.
 
-### _nsfw_md5
-A program-created list of files that would register as nsfw
+## Command line
 
-## Running
-Currently this program does not have a gui
-It can be run from the terminal in OSX and Linux by calling `./BooruGet searchName`
-In Windows it can be run from cmd or PowerShell using `python BooruGet searchName`
+Basic search:
 
-### Examples
-* ```./BooruGet "some search"``` to run
-* ```./BooruGet --help``` to get help
-* ```./BooruGet -w 1920 -t 1080 "some_tag"``` to get all images that fit 1920x1080 and match some_tag
+```powershell
+py -3 BooruGet.py landscape sunset
+```
 
-### Error
-Error is how off the aspect ratio can be. This allows more pictures that are 'close enougth' to be downlodaed.
-Setting the error lets a picture be greater than or less than the target dimensions by the amount.
-For example: an error of .15 for 1920x1080 would allows pictures in the range from 1632x918 to 2208x1242. The default error is .05 or 5%
+Gelbooru only, maximum 50 accepted posts:
 
-### Anysize
-By default, the program will ignore images that are smaller than the target size even if they are the correct aspect ratio. Using Anysize ignores this and will download all matches no matter what the size. For example, if you specify 1920x1080 the aspect ratio is 16:9, if a picture were only 1600x900 it would normally be ignored, however, with -a, it would be downloaded.
+```powershell
+py -3 BooruGet.py landscape --gelbooru-only --max-results 50
+```
 
-## Planned Features
-* GUI client for Windows and GTK
-* Better organization
-* Better README
+Approximately 1920×1080:
+
+```powershell
+py -3 BooruGet.py landscape --width 1920 --height 1080
+```
+
+Search without downloading:
+
+```powershell
+py -3 BooruGet.py landscape --dry-run --max-pages 1 --verbose
+```
+
+The most important legacy switches remain supported, including `--nodan`, `--nogel`, `--nsfw`, `--anysize`, `--width`, `--height` and `--error`.
+
+## API credentials
+
+Copy `booruget.ini.example` to `booruget.ini` if you want to provide credentials manually:
+
+```ini
+[danbooru]
+username = YOUR_NAME
+api_key = YOUR_API_KEY
+
+[gelbooru]
+user_id = YOUR_USER_ID
+api_key = YOUR_API_KEY
+```
+
+The GUI can also save these values. On Windows, its normal user configuration directory is:
+
+```text
+%APPDATA%\BooruGet\
+```
+
+API keys are stored as plain text in the INI file. Treat that file like a password-bearing configuration file.
+
+## Windows EXE build
+
+On a 64-bit Windows machine with Python installed, run:
+
+```text
+build_windows.bat
+```
+
+The build script creates an isolated build environment, runs the test suite and produces:
+
+```text
+release\BooruGet-2.2.0-win64\BooruGet.exe
+release\BooruGet-2.2.0-win64\BooruGet-CLI.exe
+release\BooruGet-2.2.0-win64.zip
+```
+
+The resulting executables do **not** require a separate Python installation.
+
+PyInstaller is not a cross-compiler, so Windows executables should be built on Windows.
+
+## GitHub Actions
+
+The repository includes `.github/workflows/build-windows.yml`.
+
+- pushes to `master`, `main` and `modernize/**` run a Win64 build
+- manual runs are available through **Actions → Build Windows EXE**
+- the release ZIP is uploaded as a workflow artifact
+- pushing a tag such as `v2.2.0` creates a GitHub Release and attaches the Win64 ZIP automatically
+
+## Modern API fixes
+
+Compared with the historical version, the modernized codebase includes:
+
+- HTTPS endpoints
+- current Danbooru `posts.json` parsing and direct use of `file_url`
+- Danbooru username/API-key authentication
+- current Gelbooru DAPI parameters with optional `user_id` + `api_key`
+- Gelbooru JSON parsing with XML fallback
+- correct modern Danbooru rating semantics (`g/s/q/e`)
+- request retries/backoff and explicit timeouts
+- bounded parallel download queue
+- Windows-safe output directory names
+- existing-file detection
+- atomic `.part` downloads
+
+## Legacy blacklist compatibility
+
+These historical files are still recognized when present:
+
+- `.config/global_blacklist`
+- `.config/nsfw_blacklist`
+- `.config/md5_global_blacklist`
+- `.config/md5_nsfw_blacklist`
+- `.config/md5_nsfw_whitelist`
+
+Each line represents one tag or MD5 value.
+
+## Tests
+
+```powershell
+py -3 -m unittest discover -s tests -v
+```
+
+## Project history and credits
+
+BooruGet was originally created by **fhrach4** and developed as a Python booru downloader. The historical README already listed a GUI as a planned feature; this fork continues that idea while updating the APIs and packaging for current systems.
+
+- Original author/project: [fhrach4/BooruGet](https://github.com/fhrach4/BooruGet)
+- Original history is preserved through the GitHub fork relationship.
+- The historical source remains available on the untouched `master` history and through the original upstream repository.
+- Modernization and continued development from 2026: **NetDaemon / netdaemon91**.
+
+Thanks also to the contributors present in the original repository history.
+
+## Licensing note
+
+The original upstream repository did not contain a project license file when this modernization began. A fork and credits do not create a new license for the historical code, so this repository intentionally does **not** apply a blanket MIT/GPL-style license to the original source.
+
+See [`NOTICE.md`](NOTICE.md) for the project-history and licensing-status notice.
+
+## Project layout
+
+- `booruget/` – modernized application package
+- `assets/` – application icon and GUI assets
+- `BooruGet-GUI.py` – GUI entry point
+- `BooruGet.py` – CLI / combined entry point
+- `build_windows.bat` / `build_windows.ps1` – reproducible Windows build
+- `.github/workflows/build-windows.yml` – Win64 CI/release build
+- `tests/` – unit tests
+- Git history / `master` – preserved historical upstream source
+
+## Recommended first live test
+
+Because API availability and account permissions are external, begin with a small dry-run:
+
+```powershell
+py -3 BooruGet.py landscape --dry-run --max-pages 1 --verbose
+```

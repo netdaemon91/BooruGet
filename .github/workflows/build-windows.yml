@@ -1,0 +1,42 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master, "modernize/**" ]
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          architecture: "x64"
+          cache: "pip"
+
+      - name: Build release
+        shell: powershell
+        run: .\build_windows.ps1
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BooruGet-2.2.0-win64
+          path: release/BooruGet-2.2.0-win64.zip
+          if-no-files-found: error
+
+      - name: Publish tagged GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "release/BooruGet-2.2.0-win64.zip" --generate-notes --title "BooruGet ${{ github.ref_name }}"

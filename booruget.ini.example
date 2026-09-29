@@ -1,0 +1,9 @@
+[danbooru]
+# Optional for public reads, useful/required for account-level API access.
+username =
+api_key =
+
+[gelbooru]
+# Gelbooru may require API authentication. Find these values in account options.
+user_id =
+api_key =
