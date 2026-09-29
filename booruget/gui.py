@@ -24,6 +24,7 @@ from .config import (
     save_gui_settings,
 )
 from .downloader import DownloadRunner
+from .i18n import TEXT, normalize_language, tr
 from .models import Credentials, Post, SearchOptions
 from .providers import (
     DEFAULT_PROVIDER_IDS,
@@ -33,6 +34,13 @@ from .providers import (
     provider_label,
     provider_referer,
 )
+
+ABOUT_LINKS = {
+    "website": "https://ntdmn.xyz/",
+    "github": "https://github.com/netdaemon91",
+    "project": "https://github.com/netdaemon91/BooruGet",
+    "original_project": "https://github.com/fhrach4/BooruGet",
+}
 
 
 class BooruGetGUI(tk.Tk):
@@ -59,11 +67,23 @@ class BooruGetGUI(tk.Tk):
         self.last_destination: Path | None = None
         self.presets: dict[str, dict] = {}
         self.style = ttk.Style(self)
+        self.language = tk.StringVar(value="de")
+        self._status_key = "status.ready"
+        self._status_values: dict[str, object] = {}
+        self._last_stats: dict[str, int] = {
+            "seen": 0,
+            "accepted": 0,
+            "downloaded": 0,
+            "failed": 0,
+        }
+        self.item_status_keys: dict[str, str] = {}
+        self._about_window: tk.Toplevel | None = None
 
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._set_icon()
         self._build()
         self._restore()
+        self._apply_language()
         self._apply_theme()
         self.after(100, self._pump)
 
@@ -107,12 +127,15 @@ class BooruGetGUI(tk.Tk):
             text="BooruGet",
             font=("Segoe UI", 18, "bold"),
         ).grid(row=0, column=0, sticky="w")
+        self.subtitle = tk.StringVar(
+            value=self._t("app.subtitle", version=__version__)
+        )
         ttk.Label(
             head,
-            text=f"v{__version__} · Multi-Booru Downloader",
+            textvariable=self.subtitle,
         ).grid(row=1, column=0, sticky="w")
 
-        self.status = tk.StringVar(value="Bereit")
+        self.status = tk.StringVar(value=self._t("status.ready"))
         ttk.Label(
             head,
             textvariable=self.status,
@@ -126,14 +149,39 @@ class BooruGetGUI(tk.Tk):
         )
         self.theme_btn.grid(row=0, column=2, rowspan=2)
 
+        self.language_btn = ttk.Button(
+            head,
+            command=self._toggle_language,
+            width=5,
+        )
+        self.language_btn.grid(
+            row=0,
+            column=3,
+            rowspan=2,
+            padx=(6, 0),
+        )
+
+        self.about_btn = ttk.Button(
+            head,
+            text=self._t("about.button"),
+            command=self._show_about,
+            width=8,
+        )
+        self.about_btn.grid(
+            row=0,
+            column=4,
+            rowspan=2,
+            padx=(6, 0),
+        )
+
         self.tags = tk.StringVar()
         self.output = tk.StringVar(
             value=str(default_gui_download_dir())
         )
         self.preset = tk.StringVar()
-        self._entry_row(root, 1, "Tags", self.tags, combo=True)
+        self._entry_row(root, 1, self._t("label.tags"), self.tags, combo=True)
 
-        ttk.Label(root, text="Preset").grid(
+        ttk.Label(root, text=self._t("label.preset")).grid(
             row=2,
             column=0,
             sticky="w",
@@ -156,7 +204,7 @@ class BooruGetGUI(tk.Tk):
         )
         ttk.Button(
             root,
-            text="★ Speichern",
+            text=self._t("button.save_favorite"),
             command=self._save_preset,
         ).grid(
             row=2,
@@ -166,7 +214,7 @@ class BooruGetGUI(tk.Tk):
         )
         ttk.Button(
             root,
-            text="Entfernen",
+            text=self._t("button.remove"),
             command=self._delete_preset,
         ).grid(
             row=2,
@@ -175,7 +223,7 @@ class BooruGetGUI(tk.Tk):
             sticky="ew",
         )
 
-        ttk.Label(root, text="Ausgabe").grid(
+        ttk.Label(root, text=self._t("label.output")).grid(
             row=3,
             column=0,
             sticky="w",
@@ -192,7 +240,7 @@ class BooruGetGUI(tk.Tk):
         )
         ttk.Button(
             root,
-            text="Ordner…",
+            text=self._t("button.folder"),
             command=self._choose_output,
         ).grid(
             row=3,
@@ -202,7 +250,7 @@ class BooruGetGUI(tk.Tk):
         )
         ttk.Button(
             root,
-            text="Öffnen",
+            text=self._t("button.open"),
             command=self._open_output,
         ).grid(
             row=3,
@@ -213,7 +261,7 @@ class BooruGetGUI(tk.Tk):
 
         opts = ttk.LabelFrame(
             root,
-            text="Quellen & Suche",
+            text=self._t("frame.sources"),
             padding=8,
         )
         opts.grid(
@@ -266,7 +314,7 @@ class BooruGetGUI(tk.Tk):
 
         ttk.Checkbutton(
             opts,
-            text="Beliebige Auflösung",
+            text=self._t("option.any_resolution"),
             variable=self.any_size,
         ).grid(
             row=1,
@@ -277,7 +325,7 @@ class BooruGetGUI(tk.Tk):
         )
         ttk.Checkbutton(
             opts,
-            text="NSFW erlauben",
+            text=self._t("option.allow_nsfw"),
             variable=self.allow_nsfw,
         ).grid(
             row=1,
@@ -289,11 +337,11 @@ class BooruGetGUI(tk.Tk):
         )
 
         fields = (
-            ("Breite", self.width),
-            ("Höhe", self.height),
-            ("Max. Ergebnisse", self.max_results),
-            ("Max. Seiten", self.max_pages),
-            ("Parallel", self.workers),
+            (self._t("field.width"), self.width),
+            (self._t("field.height"), self.height),
+            (self._t("field.max_results"), self.max_results),
+            (self._t("field.max_pages"), self.max_pages),
+            (self._t("field.parallel"), self.workers),
         )
         for col, (label, var) in enumerate(fields):
             ttk.Label(
@@ -318,7 +366,7 @@ class BooruGetGUI(tk.Tk):
 
         creds = ttk.LabelFrame(
             root,
-            text="Optionale API-Zugangsdaten",
+            text=self._t("frame.credentials"),
             padding=8,
         )
         creds.grid(
@@ -344,10 +392,10 @@ class BooruGetGUI(tk.Tk):
             value=self.credentials.gelbooru_api_key
         )
         credential_fields = (
-            ("Danbooru User", self.dan_user, False),
-            ("Danbooru API key", self.dan_key, True),
-            ("Gelbooru User ID", self.gel_user, False),
-            ("Gelbooru API key", self.gel_key, True),
+            (self._t("field.danbooru_user"), self.dan_user, False),
+            (self._t("field.danbooru_key"), self.dan_key, True),
+            (self._t("field.gelbooru_user"), self.gel_user, False),
+            (self._t("field.gelbooru_key"), self.gel_key, True),
         )
         for i, (label, var, secret) in enumerate(
             credential_fields
@@ -377,7 +425,7 @@ class BooruGetGUI(tk.Tk):
 
         ttk.Button(
             creds,
-            text="Speichern",
+            text=self._t("button.save"),
             command=self._save_credentials,
         ).grid(
             row=0,
@@ -387,10 +435,7 @@ class BooruGetGUI(tk.Tk):
         )
         ttk.Label(
             creds,
-            text=(
-                "Andere Quellen werden derzeit anonym genutzt. "
-                "Danbooru/Gelbooru funktionieren ebenfalls ohne Zugangsdaten."
-            ),
+            text=self._t("credentials.note"),
         ).grid(
             row=2,
             column=0,
@@ -409,26 +454,26 @@ class BooruGetGUI(tk.Tk):
         )
         self.start_btn = ttk.Button(
             controls,
-            text="Download starten",
+            text=self._t("button.start_download"),
             command=lambda: self._start(False),
         )
         self.start_btn.pack(side="left")
         self.search_btn = ttk.Button(
             controls,
-            text="Nur suchen",
+            text=self._t("button.search_only"),
             command=lambda: self._start(True),
         )
         self.search_btn.pack(side="left", padx=7)
         self.cancel_btn = ttk.Button(
             controls,
-            text="Abbrechen",
+            text=self._t("button.cancel"),
             command=self._cancel,
             state="disabled",
         )
         self.cancel_btn.pack(side="left")
         ttk.Button(
             controls,
-            text="Liste leeren",
+            text=self._t("button.clear"),
             command=self._clear,
         ).pack(side="right")
 
@@ -450,10 +495,7 @@ class BooruGetGUI(tk.Tk):
             sticky="ew",
         )
         self.stats = tk.StringVar(
-            value=(
-                "Gesehen 0 · Akzeptiert 0 · "
-                "Gespeichert 0 · Fehler 0"
-            )
+            value=self._t("stats", **self._last_stats)
         )
         ttk.Label(
             prog,
@@ -464,7 +506,8 @@ class BooruGetGUI(tk.Tk):
             padx=(10, 0),
         )
 
-        book = ttk.Notebook(root)
+        self.book = ttk.Notebook(root)
+        book = self.book
         book.grid(
             row=8,
             column=0,
@@ -474,8 +517,10 @@ class BooruGetGUI(tk.Tk):
         )
         queue_tab = ttk.Frame(book, padding=5)
         log_tab = ttk.Frame(book, padding=5)
-        book.add(queue_tab, text="Queue / Status")
-        book.add(log_tab, text="Log")
+        self.queue_tab = queue_tab
+        self.log_tab = log_tab
+        book.add(queue_tab, text=self._t("tab.queue"))
+        book.add(log_tab, text=self._t("tab.log"))
 
         queue_tab.rowconfigure(0, weight=1)
         queue_tab.columnconfigure(0, weight=1)
@@ -492,7 +537,7 @@ class BooruGetGUI(tk.Tk):
         left = ttk.Frame(pane)
         right = ttk.LabelFrame(
             pane,
-            text="Vorschau",
+            text=self._t("frame.preview"),
             padding=7,
         )
         pane.add(left, weight=3)
@@ -516,16 +561,19 @@ class BooruGetGUI(tk.Tk):
             show="headings",
             selectmode="browse",
         )
-        labels = (
-            "Quelle",
-            "Post",
-            "Auflösung",
-            "Rating",
-            "Status",
-            "Fortschritt",
-        )
-        for col, label in zip(cols, labels):
-            self.queue_view.heading(col, text=label)
+        self._tree_heading_keys = {
+            "provider": "tree.provider",
+            "id": "tree.post",
+            "size": "tree.resolution",
+            "rating": "tree.rating",
+            "status": "tree.status",
+            "progress": "tree.progress",
+        }
+        for col in cols:
+            self.queue_view.heading(
+                col,
+                text=self._t(self._tree_heading_keys[col]),
+            )
         for col, width in zip(
             cols,
             (105, 95, 95, 75, 165, 80),
@@ -560,7 +608,7 @@ class BooruGetGUI(tk.Tk):
 
         self.preview_label = ttk.Label(
             right,
-            text="Post auswählen",
+            text=self._t("preview.select"),
             anchor="center",
         )
         self.preview_label.grid(
@@ -582,7 +630,7 @@ class BooruGetGUI(tk.Tk):
         )
         self.open_post_btn = ttk.Button(
             right,
-            text="Originalpost im Browser öffnen",
+            text=self._t("button.open_post"),
             command=self._open_post,
             state="disabled",
         )
@@ -698,7 +746,124 @@ class BooruGetGUI(tk.Tk):
             insertbackground=fg,
         )
         self.theme_btn.configure(
-            text="☀ Light" if dark else "☾ Dark"
+            text=(
+                self._t("theme.light")
+                if dark
+                else self._t("theme.dark")
+            )
+        )
+
+    def _t(self, key: str, **values) -> str:
+        return tr(self.language.get(), key, **values)
+
+    @staticmethod
+    def _literal_translation_keys() -> dict[str, str]:
+        result: dict[str, str] = {}
+        for translations in TEXT.values():
+            for key, value in translations.items():
+                if "{" not in value:
+                    result[value] = key
+        return result
+
+    def _walk_widgets(self, parent):
+        for child in parent.winfo_children():
+            yield child
+            yield from self._walk_widgets(child)
+
+    def _apply_language(self) -> None:
+        literal_keys = self._literal_translation_keys()
+        for widget in self._walk_widgets(self):
+            try:
+                current = str(widget.cget("text"))
+            except (tk.TclError, AttributeError):
+                continue
+            key = literal_keys.get(current)
+            if key:
+                try:
+                    widget.configure(text=self._t(key))
+                except tk.TclError:
+                    pass
+
+        self.subtitle.set(
+            self._t("app.subtitle", version=__version__)
+        )
+        self.language_btn.configure(
+            text=(
+                self._t("language.switch_to_en")
+                if self.language.get() == "de"
+                else self._t("language.switch_to_de")
+            )
+        )
+        self.about_btn.configure(text=self._t("about.button"))
+        self.theme_btn.configure(
+            text=(
+                self._t("theme.light")
+                if self.theme.get() == "dark"
+                else self._t("theme.dark")
+            )
+        )
+        self._render_status()
+        self._render_stats()
+
+        self.book.tab(
+            self.queue_tab,
+            text=self._t("tab.queue"),
+        )
+        self.book.tab(
+            self.log_tab,
+            text=self._t("tab.log"),
+        )
+        for col, key in self._tree_heading_keys.items():
+            self.queue_view.heading(
+                col,
+                text=self._t(key),
+            )
+
+        for item, key in list(self.item_status_keys.items()):
+            if not self.queue_view.exists(item):
+                self.item_status_keys.pop(item, None)
+                continue
+            values = list(
+                self.queue_view.item(item, "values")
+            )
+            if len(values) >= 5:
+                values[4] = self._t(key) if key else ""
+                self.queue_view.item(item, values=values)
+
+        self._refresh_selected_post_info()
+
+        if (
+            self._about_window is not None
+            and self._about_window.winfo_exists()
+        ):
+            self._about_window.destroy()
+            self._about_window = None
+
+    def _toggle_language(self) -> None:
+        self.language.set(
+            "en"
+            if self.language.get() == "de"
+            else "de"
+        )
+        self._apply_language()
+        self._save_settings()
+
+    def _set_status(self, key: str, **values) -> None:
+        self._status_key = key
+        self._status_values = dict(values)
+        self._render_status()
+
+    def _render_status(self) -> None:
+        self.status.set(
+            self._t(
+                self._status_key,
+                **self._status_values,
+            )
+        )
+
+    def _render_stats(self) -> None:
+        self.stats.set(
+            self._t("stats", **self._last_stats)
         )
 
     def _toggle_theme(self) -> None:
@@ -766,6 +931,11 @@ class BooruGetGUI(tk.Tk):
             if saved_theme in {"dark", "light"}
             else "dark"
         )
+        self.language.set(
+            normalize_language(
+                str(s.get("language", "de"))
+            )
+        )
 
         hist = s.get("history", [])
         self.tags_box["values"] = (
@@ -814,6 +984,7 @@ class BooruGetGUI(tk.Tk):
             "max_pages": self.max_pages.get(),
             "workers": self.workers.get(),
             "theme": self.theme.get(),
+            "language": self.language.get(),
             "geometry": self.geometry(),
         }
 
@@ -849,8 +1020,8 @@ class BooruGetGUI(tk.Tk):
 
     def _save_preset(self) -> None:
         name = simpledialog.askstring(
-            "Preset speichern",
-            "Name des Suchpresets:",
+            self._t("dialog.preset_save_title"),
+            self._t("dialog.preset_save_prompt"),
             initialvalue=(
                 self.preset.get()
                 or self.tags.get()[:40]
@@ -869,8 +1040,11 @@ class BooruGetGUI(tk.Tk):
         if (
             name in self.presets
             and messagebox.askyesno(
-                "Preset entfernen",
-                f"Preset '{name}' entfernen?",
+                self._t("dialog.preset_remove_title"),
+                self._t(
+                    "dialog.preset_remove_question",
+                    name=name,
+                ),
                 parent=self,
             )
         ):
@@ -925,12 +1099,13 @@ class BooruGetGUI(tk.Tk):
                 self._credentials(),
                 self.config_path,
             )
-            self.status.set(
-                f"API-Zugang gespeichert: {path}"
+            self._set_status(
+                "status.credentials_saved",
+                path=path,
             )
         except OSError as exc:
             messagebox.showerror(
-                "BooruGet",
+                self._t("dialog.error_title"),
                 str(exc),
                 parent=self,
             )
@@ -966,8 +1141,8 @@ class BooruGetGUI(tk.Tk):
         tags = self.tags.get().strip()
         if not tags:
             messagebox.showwarning(
-                "BooruGet",
-                "Bitte mindestens einen Tag eingeben.",
+                self._t("dialog.warning_title"),
+                self._t("warning.tags_required"),
                 parent=self,
             )
             return None
@@ -975,8 +1150,8 @@ class BooruGetGUI(tk.Tk):
         selected = set(self._selected_provider_ids())
         if not selected:
             messagebox.showwarning(
-                "BooruGet",
-                "Mindestens eine Quelle aktivieren.",
+                self._t("dialog.warning_title"),
+                self._t("warning.provider_required"),
                 parent=self,
             )
             return None
@@ -994,11 +1169,8 @@ class BooruGetGUI(tk.Tk):
             )
         except ValueError:
             messagebox.showerror(
-                "BooruGet",
-                (
-                    "Breite, Höhe und Limits müssen "
-                    "ganze Zahlen sein."
-                ),
+                self._t("dialog.error_title"),
+                self._t("error.integer_fields"),
                 parent=self,
             )
             return None
@@ -1035,10 +1207,10 @@ class BooruGetGUI(tk.Tk):
         self.start_btn.configure(state="disabled")
         self.search_btn.configure(state="disabled")
         self.cancel_btn.configure(state="normal")
-        self.status.set(
-            "Suche läuft…"
+        self._set_status(
+            "status.search_running"
             if dry
-            else "Download läuft…"
+            else "status.download_running"
         )
 
         def work():
@@ -1072,7 +1244,7 @@ class BooruGetGUI(tk.Tk):
 
     def _cancel(self) -> None:
         self.cancel_event.set()
-        self.status.set("Abbruch angefordert…")
+        self._set_status("status.cancel_requested")
 
     def _key(self, post: Post) -> str:
         return f"{post.provider}:{post.post_id}"
@@ -1080,7 +1252,7 @@ class BooruGetGUI(tk.Tk):
     def _row(
         self,
         post: Post,
-        status: str = "",
+        status_key: str = "",
     ) -> str | None:
         key = self._key(post)
         item = self.items.get(key)
@@ -1097,21 +1269,22 @@ class BooruGetGUI(tk.Tk):
                 post.post_id,
                 f"{post.width}×{post.height}",
                 post.rating,
-                status,
+                self._t(status_key) if status_key else "",
                 "",
             ),
         )
         self.items[key] = item
         self.posts[item] = post
+        self.item_status_keys[item] = status_key
         return item
 
     def _set_row(
         self,
         post: Post,
-        status: str | None = None,
+        status_key: str | None = None,
         progress: str | None = None,
     ) -> None:
-        item = self._row(post, status or "")
+        item = self._row(post, status_key or "")
         if not item:
             return
         values = list(
@@ -1120,8 +1293,9 @@ class BooruGetGUI(tk.Tk):
                 "values",
             )
         )
-        if status is not None:
-            values[4] = status
+        if status_key is not None:
+            self.item_status_keys[item] = status_key
+            values[4] = self._t(status_key)
         if progress is not None:
             values[5] = progress
         self.queue_view.item(
@@ -1131,12 +1305,13 @@ class BooruGetGUI(tk.Tk):
 
     def _update_stats(self, data: dict | None) -> None:
         if data:
-            self.stats.set(
-                f"Gesehen {data.get('seen', 0)} · "
-                f"Akzeptiert {data.get('accepted', 0)} · "
-                f"Gespeichert {data.get('downloaded', 0)} · "
-                f"Fehler {data.get('failed', 0)}"
-            )
+            self._last_stats = {
+                "seen": int(data.get("seen", 0)),
+                "accepted": int(data.get("accepted", 0)),
+                "downloaded": int(data.get("downloaded", 0)),
+                "failed": int(data.get("failed", 0)),
+            }
+            self._render_stats()
 
     def _runner_event(
         self,
@@ -1157,21 +1332,24 @@ class BooruGetGUI(tk.Tk):
                     payload.get("provider", "")
                 )
             )
-            self.status.set(f"Suche: {label}")
+            self._set_status(
+                "status.searching",
+                provider=label,
+            )
         elif isinstance(post, Post):
             states = {
-                "post_accepted": ("Akzeptiert", None),
-                "download_queued": ("In Queue", "0 %"),
-                "download_started": ("Download", "0 %"),
-                "download_finished": ("Gespeichert", "100 %"),
+                "post_accepted": ("row.accepted", None),
+                "download_queued": ("row.queued", "0 %"),
+                "download_started": ("row.downloading", "0 %"),
+                "download_finished": ("row.saved", "100 %"),
                 "download_exists": (
-                    "Bereits vorhanden",
+                    "row.existing",
                     "100 %",
                 ),
-                "download_failed": ("Fehler", "—"),
-                "download_cancelled": ("Abgebrochen", "—"),
+                "download_failed": ("row.error", "—"),
+                "download_cancelled": ("row.cancelled", "—"),
                 "dry_run": (
-                    "Gefunden (Dry-run)",
+                    "row.dry_run",
                     "—",
                 ),
             }
@@ -1186,7 +1364,7 @@ class BooruGetGUI(tk.Tk):
                     )
                 self._set_row(
                     post,
-                    "Download",
+                    "row.downloading",
                     progress,
                 )
             elif event in states:
@@ -1196,10 +1374,10 @@ class BooruGetGUI(tk.Tk):
                 )
 
         if event == "run_finished":
-            self.status.set(
-                "Abgebrochen"
+            self._set_status(
+                "status.cancelled"
                 if payload.get("cancelled")
-                else "Fertig"
+                else "status.finished"
             )
         elif event == "provider_error":
             label = (
@@ -1208,8 +1386,9 @@ class BooruGetGUI(tk.Tk):
                     payload.get("provider", "")
                 )
             )
-            self.status.set(
-                f"Quellenfehler: {label}"
+            self._set_status(
+                "status.provider_error",
+                provider=label,
             )
 
     def _select(self, _e=None) -> None:
@@ -1230,17 +1409,28 @@ class BooruGetGUI(tk.Tk):
                 else "disabled"
             )
         )
+        self._refresh_selected_post_info()
+        self._load_preview(post)
+
+    def _refresh_selected_post_info(self) -> None:
+        post = self.selected_post
+        if not post:
+            self.preview_info.set("")
+            return
         tags = " ".join(post.tags.split())
         if len(tags) > 180:
             tags = tags[:179] + "…"
         self.preview_info.set(
-            f"{provider_label(post.provider)} "
-            f"#{post.post_id} · "
-            f"{post.width}×{post.height} · "
-            f"Rating {post.rating or '—'}\n"
-            f"Tags: {tags}"
+            self._t(
+                "preview.info",
+                provider=provider_label(post.provider),
+                post_id=post.post_id,
+                width=post.width,
+                height=post.height,
+                rating=post.rating or "—",
+                tags=tags,
+            )
         )
-        self._load_preview(post)
 
     def _load_preview(self, post: Post) -> None:
         key = self._key(post)
@@ -1248,12 +1438,12 @@ class BooruGetGUI(tk.Tk):
         self.preview_photo = None
         self.preview_label.configure(
             image="",
-            text="Vorschau wird geladen…",
+            text=self._t("preview.loading"),
         )
         url = post.preview_url or post.file_url
         if not url:
             self.preview_label.configure(
-                text="Keine Vorschau verfügbar"
+                text=self._t("preview.none")
             )
             return
 
@@ -1322,8 +1512,200 @@ class BooruGetGUI(tk.Tk):
         except Exception:
             self.preview_label.configure(
                 image="",
-                text="Vorschau nicht verfügbar",
+                text=self._t("preview.unavailable"),
             )
+
+    def _show_about(self) -> None:
+        if (
+            self._about_window is not None
+            and self._about_window.winfo_exists()
+        ):
+            self._about_window.lift()
+            self._about_window.focus_force()
+            return
+
+        window = tk.Toplevel(self)
+        self._about_window = window
+        window.title(self._t("about.title"))
+        window.transient(self)
+        window.resizable(False, False)
+        if hasattr(self, "_icon"):
+            try:
+                window.iconphoto(True, self._icon)
+            except tk.TclError:
+                pass
+
+        frame = ttk.Frame(window, padding=20)
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(1, weight=1)
+
+        ttk.Label(
+            frame,
+            text="BooruGet",
+            font=("Segoe UI", 18, "bold"),
+        ).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky="w",
+        )
+        ttk.Label(
+            frame,
+            text=self._t("about.description"),
+        ).grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(2, 14),
+        )
+        ttk.Label(
+            frame,
+            text=f'{self._t("about.coded_by")} NetDaemon',
+            font=("Segoe UI", 10, "bold"),
+        ).grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky="w",
+        )
+
+        self._about_link(
+            frame,
+            3,
+            "about.website",
+            ABOUT_LINKS["website"],
+        )
+        self._about_link(
+            frame,
+            4,
+            "about.github",
+            ABOUT_LINKS["github"],
+        )
+        self._about_link(
+            frame,
+            5,
+            "about.project",
+            ABOUT_LINKS["project"],
+        )
+
+        ttk.Separator(
+            frame,
+            orient="horizontal",
+        ).grid(
+            row=6,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=12,
+        )
+
+        ttk.Label(
+            frame,
+            text=(
+                f'{self._t("about.original_idea")}: '
+                "fhrach4"
+            ),
+            font=("Segoe UI", 10, "bold"),
+        ).grid(
+            row=7,
+            column=0,
+            columnspan=2,
+            sticky="w",
+        )
+        self._about_link(
+            frame,
+            8,
+            "about.original_project",
+            ABOUT_LINKS["original_project"],
+        )
+
+        ttk.Label(
+            frame,
+            text=self._t("about.version"),
+        ).grid(
+            row=9,
+            column=0,
+            sticky="w",
+            pady=(12, 0),
+        )
+        ttk.Label(
+            frame,
+            text=__version__,
+        ).grid(
+            row=9,
+            column=1,
+            sticky="w",
+            padx=(12, 0),
+            pady=(12, 0),
+        )
+
+        ttk.Button(
+            frame,
+            text=self._t("about.close"),
+            command=window.destroy,
+        ).grid(
+            row=10,
+            column=0,
+            columnspan=2,
+            sticky="e",
+            pady=(16, 0),
+        )
+        window.protocol(
+            "WM_DELETE_WINDOW",
+            window.destroy,
+        )
+        window.bind(
+            "<Destroy>",
+            lambda _e: self._clear_about_reference(window),
+        )
+
+        window.update_idletasks()
+        x = self.winfo_rootx() + (
+            self.winfo_width() - window.winfo_width()
+        ) // 2
+        y = self.winfo_rooty() + (
+            self.winfo_height() - window.winfo_height()
+        ) // 2
+        window.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def _about_link(
+        self,
+        parent,
+        row: int,
+        label_key: str,
+        url: str,
+    ) -> None:
+        ttk.Label(
+            parent,
+            text=self._t(label_key),
+        ).grid(
+            row=row,
+            column=0,
+            sticky="w",
+            pady=2,
+        )
+        ttk.Button(
+            parent,
+            text=url,
+            command=lambda target=url: webbrowser.open(
+                target,
+                new=2,
+            ),
+        ).grid(
+            row=row,
+            column=1,
+            sticky="ew",
+            padx=(12, 0),
+            pady=2,
+        )
+
+    def _clear_about_reference(
+        self,
+        window: tk.Toplevel,
+    ) -> None:
+        if self._about_window is window:
+            self._about_window = None
 
     def _open_post(self) -> None:
         if (
@@ -1358,13 +1740,13 @@ class BooruGetGUI(tk.Tk):
                     self.cancel_btn.configure(
                         state="disabled"
                     )
-                    if self.status.get() not in {
-                        "Fertig",
-                        "Abgebrochen",
+                    if self._status_key not in {
+                        "status.finished",
+                        "status.cancelled",
                     }:
-                        self.status.set("Bereit")
+                        self._set_status("status.ready")
                 elif event == "fatal":
-                    self.status.set("Fehler")
+                    self._set_status("status.error")
                 elif event == "preview":
                     self._show_preview(payload)
                 elif (
@@ -1374,7 +1756,7 @@ class BooruGetGUI(tk.Tk):
                 ):
                     self.preview_label.configure(
                         image="",
-                        text="Vorschau nicht verfügbar",
+                        text=self._t("preview.unavailable"),
                     )
                 elif isinstance(payload, dict):
                     self._runner_event(
@@ -1390,12 +1772,13 @@ class BooruGetGUI(tk.Tk):
             self.queue_view.delete(item)
         self.items.clear()
         self.posts.clear()
+        self.item_status_keys.clear()
         self.selected_post = None
         self.preview_key = ""
         self.preview_photo = None
         self.preview_label.configure(
             image="",
-            text="Post auswählen",
+            text=self._t("preview.select"),
         )
         self.preview_info.set("")
         self.open_post_btn.configure(
@@ -1407,11 +1790,8 @@ class BooruGetGUI(tk.Tk):
             self.worker
             and self.worker.is_alive()
             and not messagebox.askyesno(
-                "BooruGet schließen",
-                (
-                    "Ein Download läuft noch. "
-                    "Abbrechen und schließen?"
-                ),
+                self._t("dialog.close_title"),
+                self._t("dialog.close_question"),
                 parent=self,
             )
         ):

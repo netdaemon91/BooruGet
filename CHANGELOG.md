@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0 – 2026-09-29
+
+- Added persistent German/English GUI language switching.
+- Localized GUI labels, dialogs, status messages, queue statuses, table headings and preview metadata.
+- Added an About button beside the theme/language controls.
+- Added an About window with version, `Coded by NetDaemon`, https://ntdmn.xyz/, NetDaemon GitHub/profile and project links, and credit/link to the original `fhrach4/BooruGet` project.
+- Language changes apply immediately without restarting the application and are stored in GUI settings.
+- Added i18n and About-link regression tests.
+
 ## 2.3.0 – 2026-09-29
 
 - Added a provider registry and shared provider-engine architecture.
