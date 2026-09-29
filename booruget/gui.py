@@ -112,12 +112,12 @@ class BooruGetGUI(tk.Tk):
             ttk.Label(opts, text=label).grid(row=1, column=col * 2, sticky="e", pady=(7, 0))
             ttk.Entry(opts, width=8, textvariable=var).grid(row=1, column=col * 2 + 1, padx=(4, 12), pady=(7, 0))
 
-        creds = ttk.LabelFrame(root, text="API-Zugang", padding=8)
+        creds = ttk.LabelFrame(root, text="Optionale API-Zugangsdaten", padding=8)
         creds.grid(row=5, column=0, columnspan=5, sticky="ew", pady=6)
         creds.columnconfigure(1, weight=1); creds.columnconfigure(3, weight=1)
         self.dan_user = tk.StringVar(value=self.credentials.danbooru_username); self.dan_key = tk.StringVar(value=self.credentials.danbooru_api_key)
         self.gel_user = tk.StringVar(value=self.credentials.gelbooru_user_id); self.gel_key = tk.StringVar(value=self.credentials.gelbooru_api_key)
-        fields = (("Danbooru User", self.dan_user, False), ("API key", self.dan_key, True), ("Gelbooru User ID", self.gel_user, False), ("API key", self.gel_key, True))
+        fields = (("Danbooru User (optional)", self.dan_user, False), ("Danbooru API key (optional)", self.dan_key, True), ("Gelbooru User ID (optional)", self.gel_user, False), ("Gelbooru API key (optional)", self.gel_key, True))
         for i, (label, var, secret) in enumerate(fields):
             row, pair = divmod(i, 2); base = pair * 2
             ttk.Label(creds, text=label).grid(row=row, column=base, sticky="w", pady=2)

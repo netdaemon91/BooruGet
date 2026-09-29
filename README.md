@@ -96,7 +96,7 @@ user_id = YOUR_USER_ID
 api_key = YOUR_API_KEY
 ```
 
-The GUI can also save these values. On Windows, its normal user configuration directory is:
+These credentials are optional for normal public searches. Danbooru supports anonymous public read requests. BooruGet also attempts Gelbooru anonymously and automatically falls back to its public HTML pages when Gelbooru temporarily requires DAPI authentication. Credentials can still be useful for account-specific access and API limits.\n\nThe GUI can save these values. On Windows, its normal user configuration directory is:
 
 ```text
 %APPDATA%\BooruGet\
@@ -115,9 +115,9 @@ build_windows.bat
 The build script creates an isolated build environment, runs the test suite and produces:
 
 ```text
-release\BooruGet-2.2.1-win64\BooruGet.exe
-release\BooruGet-2.2.1-win64\BooruGet-CLI.exe
-release\BooruGet-2.2.1-win64.zip
+release\BooruGet-2.2.2-win64\BooruGet.exe
+release\BooruGet-2.2.2-win64\BooruGet-CLI.exe
+release\BooruGet-2.2.2-win64.zip
 ```
 
 The resulting executables do **not** require a separate Python installation.
@@ -131,7 +131,7 @@ The repository includes `.github/workflows/build-windows.yml`.
 - pushes to `master`, `main` and `modernize/**` run a Win64 build
 - manual runs are available through **Actions → Build Windows EXE**
 - the release ZIP is uploaded as a workflow artifact
-- pushing a tag such as `v2.2.1` creates a GitHub Release and attaches the Win64 ZIP automatically
+- pushing a tag such as `v2.2.2` creates a GitHub Release and attaches the Win64 ZIP automatically
 
 ## Modern API fixes
 

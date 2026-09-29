@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.2 – 2026-09-29
+
+- Gelbooru credentials are explicitly optional in the GUI.
+- Anonymous Gelbooru searches try DAPI first and automatically fall back to the public HTML search and post pages when Gelbooru temporarily requires API authentication.
+- Handles Gelbooru authentication refusals returned as HTTP 401/403, JSON strings, JSON error objects or XML error responses.
+- Danbooru credentials are also explicitly optional; public searches continue to use the anonymous `posts.json` API when no account is configured.
+- Added regression tests for anonymous Gelbooru fallback and anonymous Danbooru requests.
+
 ## 2.2.1 – 2026-09-29
 
 - Fixed a startup crash in the Tkinter GUI caused by accidentally overriding Tkinter's internal `Misc._options()` method.
