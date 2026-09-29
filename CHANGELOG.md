@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.1 – 2026-09-29
+
+- Fixed a startup crash in the Tkinter GUI caused by accidentally overriding Tkinter's internal `Misc._options()` method.
+- Renamed the BooruGet search-options builder to `_build_search_options()` to avoid framework method collisions.
+- Added a regression test so future GUI changes cannot silently reintroduce this Tkinter method shadowing bug.
+- Rebuilt the Windows release package as 2.2.1.
+
 ## 2.2.0 – 2026-09-29
 
 - Added selectable **Dark / Light Mode**, persisted between launches.

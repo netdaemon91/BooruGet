@@ -232,7 +232,7 @@ class BooruGetGUI(tk.Tk):
         elif sys.platform == "darwin": subprocess.Popen(["open", str(path)])
         else: subprocess.Popen(["xdg-open", str(path)])
 
-    def _options(self, dry: bool) -> SearchOptions | None:
+    def _build_search_options(self, dry: bool) -> SearchOptions | None:
         tags = self.tags.get().strip()
         if not tags: messagebox.showwarning("BooruGet", "Bitte mindestens einen Tag eingeben.", parent=self); return None
         if not (self.use_gel.get() or self.use_dan.get()): messagebox.showwarning("BooruGet", "Mindestens eine Quelle aktivieren.", parent=self); return None
@@ -242,7 +242,7 @@ class BooruGetGUI(tk.Tk):
 
     def _start(self, dry: bool) -> None:
         if self.worker and self.worker.is_alive(): return
-        options = self._options(dry)
+        options = self._build_search_options(dry)
         if not options: return
         self._save_settings(); self.cancel_event.clear(); self.progress.start(12); self.start_btn.configure(state="disabled"); self.search_btn.configure(state="disabled"); self.cancel_btn.configure(state="normal"); self.status.set("Suche läuft…" if dry else "Download läuft…")
         def work():

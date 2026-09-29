@@ -115,9 +115,9 @@ build_windows.bat
 The build script creates an isolated build environment, runs the test suite and produces:
 
 ```text
-release\BooruGet-2.2.0-win64\BooruGet.exe
-release\BooruGet-2.2.0-win64\BooruGet-CLI.exe
-release\BooruGet-2.2.0-win64.zip
+release\BooruGet-2.2.1-win64\BooruGet.exe
+release\BooruGet-2.2.1-win64\BooruGet-CLI.exe
+release\BooruGet-2.2.1-win64.zip
 ```
 
 The resulting executables do **not** require a separate Python installation.
@@ -131,7 +131,7 @@ The repository includes `.github/workflows/build-windows.yml`.
 - pushes to `master`, `main` and `modernize/**` run a Win64 build
 - manual runs are available through **Actions → Build Windows EXE**
 - the release ZIP is uploaded as a workflow artifact
-- pushing a tag such as `v2.2.0` creates a GitHub Release and attaches the Win64 ZIP automatically
+- pushing a tag such as `v2.2.1` creates a GitHub Release and attaches the Win64 ZIP automatically
 
 ## Modern API fixes
 
