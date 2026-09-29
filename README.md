@@ -5,9 +5,9 @@
 > Original project: **fhrach4/BooruGet**  
 > Modernized fork: **netdaemon91/BooruGet**
 
-## BooruGet 2.3
+## BooruGet 2.4
 
-BooruGet is now a **multi-booru downloader**. Seven built-in sources share three provider engines instead of seven separate implementations:
+BooruGet is a **multi-booru downloader** with a bilingual German/English desktop interface. Seven built-in sources share three provider engines instead of seven separate implementations:
 
 | Provider | ID | Engine | Default |
 | --- | --- | --- | --- |
@@ -26,6 +26,8 @@ The registry architecture makes additional compatible sites much easier to add l
 The Tkinter desktop application includes:
 
 - selectable provider checkboxes for all built-in boorus
+- persistent **Deutsch / English** language switching
+- **About** window with version, credits, project links and NetDaemon website
 - Dark / Light Mode
 - named search presets / favorites, including provider selections
 - queue with per-file status and progress
@@ -44,6 +46,8 @@ py -3 BooruGet-GUI.py
 ```
 
 On Windows, `start_gui.bat` can also be launched by double-clicking it.
+
+The language button in the header switches the complete GUI between German and English immediately. The selected language is persisted with the other GUI settings. The **About** button next to the appearance/language controls shows the current version, modernization credits, NetDaemon links and the original `fhrach4/BooruGet` project.
 
 ## Command line
 
@@ -132,14 +136,14 @@ build_windows.bat
 The build produces:
 
 ```text
-release\BooruGet-2.3.0-win64\BooruGet.exe
-release\BooruGet-2.3.0-win64\BooruGet-CLI.exe
-release\BooruGet-2.3.0-win64.zip
+release\BooruGet-2.4.0-win64\BooruGet.exe
+release\BooruGet-2.4.0-win64\BooruGet-CLI.exe
+release\BooruGet-2.4.0-win64.zip
 ```
 
 The executables do not require a separate Python installation.
 
-The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.3.0` publish the ZIP as a GitHub Release.
+The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.4.0` publish the ZIP as a GitHub Release.
 
 ## Download safety / reliability
 
