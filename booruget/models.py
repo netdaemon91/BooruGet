@@ -30,8 +30,14 @@ class Credentials:
 class SearchOptions:
     tags: str
     output_dir: str = "downloads"
+
+    # Legacy booleans remain for source/API compatibility. New code should
+    # prefer provider_ids. When provider_ids is None, these two flags decide
+    # whether the historical Danbooru/Gelbooru providers are enabled.
     use_danbooru: bool = True
     use_gelbooru: bool = True
+    provider_ids: set[str] | None = None
+
     any_size: bool = True
     target_width: int = -1
     target_height: int = -1

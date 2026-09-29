@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.3.0 – 2026-09-29
+
+- Added a provider registry and shared provider-engine architecture.
+- Added Safebooru and Rule34.xxx through the Gelbooru 0.2 engine.
+- Added yande.re, Konachan and Sakugabooru through a new Moebooru engine.
+- GUI now exposes all seven built-in providers as selectable sources and stores provider choices in settings/presets.
+- CLI gained `--providers`, `--all-providers` and `--list-providers` while preserving legacy Danbooru/Gelbooru switches.
+- Added provider-specific Referer handling for previews/downloads.
+- Added per-target download locks to prevent duplicate cross-provider results from racing on the same `.part` file.
+- Added multi-booru registry, factory, Moebooru and compatibility tests.
+
 ## 2.2.2 – 2026-09-29
 
 - Gelbooru credentials are explicitly optional in the GUI.
