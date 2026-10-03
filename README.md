@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-DE%20%7C%20EN-2ea44f)
-![Boorus](https://img.shields.io/badge/Boorus-7-purple)
+![Boorus](https://img.shields.io/badge/Boorus-10-purple)
 
 **BooruGet** is a modernized continuation of the original Python booru image downloader. The 2026 revival keeps the original command-line workflow while adding a desktop GUI, current APIs, multi-booru provider engines, safer downloads and reproducible Windows builds.
 
@@ -132,6 +132,9 @@ API keys are stored as plain text in the INI file.
 - **DanbooruProvider** for Danbooru-style `posts.json`
 - **GelbooruV02Provider** for Gelbooru/Safebooru/Rule34-style DAPI
 - **MoebooruProvider** for yande.re/Konachan/Sakugabooru `post.json`
+- **E621Provider** for e621 nested JSON posts
+- **PhilomenaProvider** for Derpibooru JSON searches
+- **ShimmieProvider** for Paheal XML searches
 
 Each site is described by a small `ProviderSpec` with its label, family, public URL and API URL. This is the intended extension point for future boorus.
 
