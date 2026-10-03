@@ -1,7 +1,7 @@
 # BooruGet
 
 [![Windows Build](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml/badge.svg)](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml)
-![Version](https://img.shields.io/badge/version-2.4.1-blue)
+![Version](https://img.shields.io/badge/version-2.5.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-DE%20%7C%20EN-2ea44f)
@@ -12,9 +12,9 @@
 > Original project: **fhrach4/BooruGet**  
 > Modernized fork: **netdaemon91/BooruGet**
 
-## BooruGet 2.4
+## BooruGet 2.5
 
-BooruGet is a **multi-booru downloader** with a bilingual German/English desktop interface. Seven built-in sources share three provider engines instead of seven separate implementations:
+BooruGet is a **multi-booru downloader** with a bilingual German/English desktop interface. Nine built-in sources share reusable provider engines:
 
 | Provider | ID | Engine | Default |
 | --- | --- | --- | --- |
@@ -25,6 +25,8 @@ BooruGet is a **multi-booru downloader** with a bilingual German/English desktop
 | yande.re | `yandere` | Moebooru | no |
 | Konachan | `konachan` | Moebooru | no |
 | Sakugabooru | `sakugabooru` | Moebooru | no |
+| e621 | `e621` | e621 | no |
+| Derpibooru | `derpibooru` | Philomena | no |
 
 The registry architecture makes additional compatible sites much easier to add later.
 
@@ -143,14 +145,14 @@ build_windows.bat
 The build produces:
 
 ```text
-release\BooruGet-2.4.1-win64\BooruGet.exe
-release\BooruGet-2.4.1-win64\BooruGet-CLI.exe
-release\BooruGet-2.4.1-win64.zip
+release\BooruGet-2.5.0-win64\BooruGet.exe
+release\BooruGet-2.5.0-win64\BooruGet-CLI.exe
+release\BooruGet-2.5.0-win64.zip
 ```
 
 The executables do not require a separate Python installation.
 
-The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.4.1` publish the ZIP as a GitHub Release.
+The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.5.0` publish the ZIP as a GitHub Release.
 
 ## Download safety / reliability
 
@@ -214,3 +216,9 @@ See [`NOTICE.md`](NOTICE.md) for the project-history and licensing-status notice
 ```powershell
 py -3 BooruGet.py landscape --providers safebooru yandere --dry-run --max-pages 1 --verbose
 ```
+
+### Provider-specific searches
+
+Derpibooru accepts its native search syntax: separate tags with commas, for example `safe, landscape`. Tags containing spaces stay intact. Its anonymous API uses the site’s default content filter; selecting adult ratings locally does not override that server filter. Derpibooru uses SHA-512 instead of MD5, so cross-provider MD5 duplicate detection is unavailable for this source.
+
+e621 searches use the usual space-separated tags. Deleted posts and posts without an accessible original file are skipped. All nine sources appear in a four-column selection grid; new sources remain disabled by default.

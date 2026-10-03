@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-$Version = "2.4.1"
+$Version = "2.5.0"
 $Venv = Join-Path $PSScriptRoot ".venv-build"
 $ReleaseRoot = Join-Path $PSScriptRoot "release"
 $ReleaseDir = Join-Path $ReleaseRoot "BooruGet-$Version-win64"

@@ -30,6 +30,7 @@ class MultiBooruTests(unittest.TestCase):
             "--providers",
             "konachan",
             "sakugabooru",
+            "--",
             "tag",
         ])
         self.assertEqual(
@@ -42,7 +43,7 @@ class MultiBooruTests(unittest.TestCase):
             "--all-providers",
             "tag",
         ])
-        self.assertEqual(len(_selected_providers(args)), 7)
+        self.assertEqual(len(_selected_providers(args)), 9)
 
 
 if __name__ == "__main__":

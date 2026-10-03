@@ -53,6 +53,8 @@ class ProviderParsingTests(unittest.TestCase):
                 "yandere",
                 "konachan",
                 "sakugabooru",
+                "e621",
+                "derpibooru",
             ],
         )
 

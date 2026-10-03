@@ -436,6 +436,7 @@ class BooruGetGUI(tk.Tk):
         ttk.Label(
             creds,
             text=self._t("credentials.note"),
+            wraplength=850,
         ).grid(
             row=2,
             column=0,

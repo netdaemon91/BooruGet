@@ -18,7 +18,7 @@ from urllib3.util.retry import Retry
 from .models import Credentials, Post
 
 
-USER_AGENT = "BooruGet/2.4.1 (+https://github.com/netdaemon91/BooruGet)"
+USER_AGENT = "BooruGet/2.5.0 (+https://github.com/netdaemon91/BooruGet)"
 
 
 class ProviderError(RuntimeError):
@@ -77,6 +77,10 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         "https://www.sakugabooru.com/",
         "https://www.sakugabooru.com/post.json",
     ),
+    ProviderSpec("e621", "e621", "e621", "https://e621.net/",
+                 "https://e621.net/posts.json", adult_site=True),
+    ProviderSpec("derpibooru", "Derpibooru", "philomena", "https://derpibooru.org/",
+                 "https://derpibooru.org/api/v1/json/search/images"),
 )
 
 PROVIDER_MAP = {spec.id: spec for spec in PROVIDER_SPECS}
@@ -801,6 +805,85 @@ class MoebooruProvider(Provider):
         )
 
 
+class E621Provider(MoebooruProvider):
+    """e621 uses nested file, preview and tag-category objects."""
+    delay_seconds = 1.0
+
+    def _post_from_api(self, item: dict) -> Post | None:
+        file = item.get("file") or {}
+        if (item.get("flags") or {}).get("deleted") or not file.get("url"):
+            return None
+        tag_groups = item.get("tags") or {}
+        tags = " ".join(tag for group in tag_groups.values() for tag in group)
+        post = super()._post_from_api({
+            "id": item.get("id"), "md5": file.get("md5"),
+            "file_url": file["url"], "file_ext": file.get("ext"),
+            "width": file.get("width"), "height": file.get("height"),
+            "rating": item.get("rating"), "tags": tags,
+            "preview_url": (item.get("preview") or {}).get("url"),
+        })
+        if post:
+            post.post_url = urljoin(self.site_url, f"posts/{post.post_id}")
+        return post
+
+
+class PhilomenaProvider(MoebooruProvider):
+    """Philomena search syntax is passed through unchanged (comma-separated tags)."""
+    per_page = 50
+    delay_seconds = 1.0
+
+    def iter_posts(self, tags: str, max_pages: int = 0) -> Iterator[Post]:
+        page = 1
+        while not max_pages or page <= max_pages:
+            try:
+                response = self.session.get(self.api_url, params={
+                    "q": tags, "page": page, "per_page": self.per_page,
+                    "sf": "id", "sd": "desc",
+                }, timeout=(10, 40))
+                response.raise_for_status()
+                payload = response.json()
+            except (requests.RequestException, ValueError) as exc:
+                raise ProviderError(f"{self.label} search failed: {exc}") from exc
+            if not isinstance(payload, dict) or not isinstance(payload.get("images"), list):
+                raise ProviderError(f"{self.label} returned an invalid search response.")
+            images = payload["images"]
+            for item in images:
+                post = self._post_from_api(item)
+                if post:
+                    yield post
+            if not images or len(images) < self.per_page:
+                return
+            total = payload.get("total")
+            if isinstance(total, int) and page * self.per_page >= total:
+                return
+            page += 1
+            self._sleep()
+
+    def _post_from_api(self, item: dict) -> Post | None:
+        if item.get("hidden_from_users") or item.get("deletion_reason"):
+            return None
+        representations = item.get("representations") or {}
+        tags = item.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tag.strip() for tag in tags.split(",")]
+        rating = "unknown"
+        for name, normalized in (("explicit", "explicit"), ("questionable", "questionable"),
+                                 ("suggestive", "sensitive"), ("safe", "general")):
+            if name in tags:
+                rating = normalized
+                break
+        post = super()._post_from_api({
+            "id": item.get("id"), "file_url": representations.get("full") or item.get("view_url"),
+            "file_ext": item.get("format"), "width": item.get("width"),
+            "height": item.get("height"), "rating": rating,
+            "tags": " ".join(tag.replace(" ", "_") for tag in tags),
+            "preview_url": representations.get("thumb") or representations.get("small"),
+        })
+        if post:
+            post.post_url = urljoin(self.site_url, f"images/{post.post_id}")
+        return post
+
+
 def create_provider(
     provider_id: str,
     credentials: Credentials,
@@ -815,4 +898,8 @@ def create_provider(
         return GelbooruV02Provider(spec, credentials, verbose)
     if spec.family == "moebooru":
         return MoebooruProvider(spec, credentials, verbose)
+    if spec.family == "e621":
+        return E621Provider(spec, credentials, verbose)
+    if spec.family == "philomena":
+        return PhilomenaProvider(spec, credentials, verbose)
     raise ValueError(f"Unsupported provider family: {spec.family}")

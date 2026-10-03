@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.0 – 2026-10-04
+
+- Added e621 and Derpibooru, bringing the source selection to nine providers.
+- Added nested e621 file/tag mapping and Philomena pagination, ratings and previews.
+- Documented Derpibooru native query syntax and anonymous filter limitations.
+
+
 ## 2.4.1 – 2026-09-29
 
 - Added README badges for Windows build status, version, Python requirement, Windows x64, bilingual GUI and provider count.
