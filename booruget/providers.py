@@ -18,7 +18,7 @@ from urllib3.util.retry import Retry
 from .models import Credentials, Post
 
 
-USER_AGENT = "BooruGet/2.5.0 (+https://github.com/netdaemon91/BooruGet)"
+USER_AGENT = "BooruGet/2.5.1 (+https://github.com/netdaemon91/BooruGet)"
 
 
 class ProviderError(RuntimeError):
@@ -81,6 +81,8 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                  "https://e621.net/posts.json", adult_site=True),
     ProviderSpec("derpibooru", "Derpibooru", "philomena", "https://derpibooru.org/",
                  "https://derpibooru.org/api/v1/json/search/images"),
+    ProviderSpec("paheal", "Rule34 Paheal", "shimmie", "https://rule34.paheal.net/",
+                 "https://rule34.paheal.net/api/danbooru/post/index.xml", adult_site=True),
 )
 
 PROVIDER_MAP = {spec.id: spec for spec in PROVIDER_SPECS}
@@ -805,6 +807,39 @@ class MoebooruProvider(Provider):
         )
 
 
+class ShimmieProvider(GelbooruV02Provider):
+    """Shimmie's Danbooru compatibility API returns XML and one-based pages."""
+
+    def iter_posts(self, tags: str, max_pages: int = 0) -> Iterator[Post]:
+        page = 1
+        while not max_pages or page <= max_pages:
+            try:
+                response = self.session.get(self.api_url, params={
+                    "tags": tags, "limit": self.per_page, "page": page,
+                }, timeout=(10, 40))
+                response.raise_for_status()
+                root = ET.fromstring(response.text)
+            except (requests.RequestException, ET.ParseError) as exc:
+                raise ProviderError(f"{self.label} XML search failed: {exc}") from exc
+            if root.tag != "posts":
+                raise ProviderError(f"{self.label} returned an invalid XML search response.")
+            records = [dict(child.attrib) for child in root if child.tag == "post"]
+            for item in records:
+                # Paheal has no reliable per-post ratings. Keep it behind the adult filter.
+                item["rating"] = "explicit"
+                item["file_ext"] = _extension(str(item.get("file_name") or ""),
+                                              _extension(str(item.get("file_url") or "")))
+                post = self._post_from_api(item)
+                if post:
+                    post.post_url = urljoin(self.site_url, f"post/view/{post.post_id}")
+                    yield post
+            count = root.attrib.get("count", "")
+            if len(records) < self.per_page or (count.isdigit() and page * self.per_page >= int(count)):
+                return
+            page += 1
+            self._sleep()
+
+
 class E621Provider(MoebooruProvider):
     """e621 uses nested file, preview and tag-category objects."""
     delay_seconds = 1.0
@@ -902,4 +937,6 @@ def create_provider(
         return E621Provider(spec, credentials, verbose)
     if spec.family == "philomena":
         return PhilomenaProvider(spec, credentials, verbose)
+    if spec.family == "shimmie":
+        return ShimmieProvider(spec, credentials, verbose)
     raise ValueError(f"Unsupported provider family: {spec.family}")

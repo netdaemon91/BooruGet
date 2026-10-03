@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1 – 2026-10-04
+
+- Added Paheal through Shimmie’s XML API, with conservative explicit ratings.
+- Checked rule34.us and Behoimi; left both out pending a confirmed interface.
+
+
 ## 2.5.0 – 2026-10-04
 
 - Added e621 and Derpibooru, bringing the source selection to nine providers.
