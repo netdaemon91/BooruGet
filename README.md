@@ -1,7 +1,7 @@
 # BooruGet
 
 [![Windows Build](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml/badge.svg)](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml)
-![Version](https://img.shields.io/badge/version-2.5.1-blue)
+![Version](https://img.shields.io/badge/version-2.6.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-DE%20%7C%20EN-2ea44f)
@@ -12,7 +12,7 @@
 > Original project: **fhrach4/BooruGet**  
 > Modernized fork: **netdaemon91/BooruGet**
 
-## BooruGet 2.5
+## BooruGet 2.6
 
 BooruGet is a **multi-booru downloader** with a bilingual German/English desktop interface. Ten built-in sources share reusable provider engines:
 
@@ -149,14 +149,14 @@ build_windows.bat
 The build produces:
 
 ```text
-release\BooruGet-2.5.1-win64\BooruGet.exe
-release\BooruGet-2.5.1-win64\BooruGet-CLI.exe
-release\BooruGet-2.5.1-win64.zip
+release\BooruGet-2.6.0-win64\BooruGet.exe
+release\BooruGet-2.6.0-win64\BooruGet-CLI.exe
+release\BooruGet-2.6.0-win64.zip
 ```
 
 The executables do not require a separate Python installation.
 
-The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.5.1` publish the ZIP as a GitHub Release.
+The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.6.0` publish the ZIP as a GitHub Release.
 
 ## Download safety / reliability
 
@@ -230,3 +230,7 @@ e621 searches use the usual space-separated tags. Deleted posts and posts withou
 Paheal uses Shimmie’s Danbooru-compatible XML API. Because its API has no reliable per-post ratings, every result is conservatively treated as explicit and requires the corresponding rating setting. The user confirmed a live XML search response and opened its original CDN image successfully. The adapter is tested with that response; the complete application download still needs a Windows smoke test.
 
 Other candidates checked: rule34.us identifies as modified Gelbooru 0.1.11 with custom routes; no confirmed reusable API was found. Behoimi could not be reached from this environment. Neither is included.
+
+### Large image preview
+
+Double-click a result or the small preview, press Enter in the results list, or choose **Large preview**. Resize the popup to fit the original image. Use Previous/Next or the left/right arrow keys to browse the current result list; Escape closes the window. Videos and unsupported originals fall back to a labeled thumbnail. Image previews show the first frame of animations.

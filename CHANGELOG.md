@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.0 – 2026-10-19
+
+- Added a resizable original-image popup with Previous/Next and keyboard navigation.
+- Popup navigation follows the result list and keeps its selected row visible.
+- Background image loading ignores stale results; unsupported originals fall back to thumbnails.
+
+
 ## 2.5.1 – 2026-10-04
 
 - Added Paheal through Shimmie’s XML API, with conservative explicit ratings.

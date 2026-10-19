@@ -14,6 +14,7 @@ import requests
 from PIL import Image, ImageTk
 
 from . import __version__
+from .viewer import ImageViewer
 from .config import (
     DEFAULT_CONFIG,
     default_gui_download_dir,
@@ -63,6 +64,7 @@ class BooruGetGUI(tk.Tk):
         self.posts: dict[str, Post] = {}
         self.preview_photo: ImageTk.PhotoImage | None = None
         self.preview_key = ""
+        self.image_viewer = None
         self.selected_post: Post | None = None
         self.last_destination: Path | None = None
         self.presets: dict[str, dict] = {}
@@ -593,6 +595,8 @@ class BooruGetGUI(tk.Tk):
             "<<TreeviewSelect>>",
             self._select,
         )
+        self.queue_view.bind("<Double-1>", self._open_image_viewer)
+        self.queue_view.bind("<Return>", self._open_image_viewer)
         sb = ttk.Scrollbar(
             left,
             orient="vertical",
@@ -617,6 +621,7 @@ class BooruGetGUI(tk.Tk):
             column=0,
             sticky="nsew",
         )
+        self.preview_label.bind("<Double-1>", self._open_image_viewer)
         self.preview_info = tk.StringVar()
         ttk.Label(
             right,
@@ -640,6 +645,9 @@ class BooruGetGUI(tk.Tk):
             column=0,
             sticky="ew",
         )
+
+        ttk.Button(right, text=self._t("viewer.open"),
+                   command=self._open_image_viewer).grid(row=3, column=0, sticky="ew", pady=(6, 0))
 
         log_tab.rowconfigure(0, weight=1)
         log_tab.columnconfigure(0, weight=1)
@@ -1413,6 +1421,28 @@ class BooruGetGUI(tk.Tk):
         self._refresh_selected_post_info()
         self._load_preview(post)
 
+    def _viewer_entries(self):
+        return {item: self.posts[item] for item in self.queue_view.get_children()
+                if item in self.posts}
+
+    def _viewer_select(self, item):
+        self.queue_view.selection_set(item)
+        self.queue_view.focus(item)
+        self.queue_view.see(item)
+
+    def _open_image_viewer(self, event=None):
+        if event is not None and event.widget is self.queue_view and event.type == tk.EventType.ButtonPress:
+            item = self.queue_view.identify_row(event.y)
+            if not item:
+                return
+            self._viewer_select(item)
+        selection = self.queue_view.selection()
+        if not selection or selection[0] not in self.posts:
+            return
+        if self.image_viewer is None or not self.image_viewer.winfo_exists():
+            self.image_viewer = ImageViewer(self, self._viewer_entries, self._viewer_select, self._t)
+        self.image_viewer.show(selection[0])
+
     def _refresh_selected_post_info(self) -> None:
         post = self.selected_post
         if not post:
@@ -1778,6 +1808,9 @@ class BooruGetGUI(tk.Tk):
         self.after(100, self._pump)
 
     def _clear(self) -> None:
+        if self.image_viewer is not None and self.image_viewer.winfo_exists():
+            self.image_viewer.destroy()
+        self.image_viewer = None
         for item in self.queue_view.get_children():
             self.queue_view.delete(item)
         self.items.clear()
