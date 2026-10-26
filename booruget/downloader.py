@@ -226,6 +226,67 @@ class DownloadRunner:
         )
         return self.stats
 
+    def download_posts(self, posts) -> RunStats:
+        """Download exactly the supplied posts without querying providers."""
+        posts = list(posts)
+        if not posts:
+            raise ValueError("No posts supplied for download.")
+
+        destination = (
+            Path(self.options.output_dir).expanduser().resolve()
+            / safe_folder_name(self.options.tags)
+        )
+        destination.mkdir(parents=True, exist_ok=True)
+        self.log(f"Output: {destination}")
+        self._emit("destination", path=str(destination))
+
+        worker_count = max(1, min(16, self.options.workers))
+        pending: set[Future] = set()
+        max_pending = max(worker_count * 4, 8)
+
+        with ThreadPoolExecutor(max_workers=worker_count) as pool:
+            for post in posts:
+                if self.cancel_event.is_set():
+                    break
+
+                self.stats.seen += 1
+                self.stats.accepted += 1
+                self._emit(
+                    "download_queued",
+                    post=post,
+                    stats=asdict(self.stats),
+                )
+                pending.add(
+                    pool.submit(
+                        self._download_one,
+                        post,
+                        destination,
+                    )
+                )
+                if len(pending) >= max_pending:
+                    done, pending = wait(
+                        pending,
+                        return_when=FIRST_COMPLETED,
+                    )
+                    self._consume_futures(done)
+
+            if pending:
+                self._consume_futures(as_completed(pending))
+
+        self.log(
+            "Finished list download: "
+            f"selected={self.stats.accepted}, "
+            f"downloaded={self.stats.downloaded}, "
+            f"existing={self.stats.skipped_existing}, "
+            f"failed={self.stats.failed}"
+        )
+        self._emit(
+            "run_finished",
+            stats=asdict(self.stats),
+            cancelled=self.cancel_event.is_set(),
+        )
+        return self.stats
+
     def _consume_futures(self, futures) -> None:
         for future in futures:
             try:
