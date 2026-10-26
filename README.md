@@ -1,7 +1,7 @@
 # BooruGet
 
 [![Windows Build](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml/badge.svg)](https://github.com/netdaemon91/BooruGet/actions/workflows/build-windows.yml)
-![Version](https://img.shields.io/badge/version-2.6.0-blue)
+![Version](https://img.shields.io/badge/version-2.6.1-blue)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-DE%20%7C%20EN-2ea44f)
@@ -12,7 +12,7 @@
 > Original project: **fhrach4/BooruGet**  
 > Modernized fork: **netdaemon91/BooruGet**
 
-## BooruGet 2.6
+## BooruGet 2.6.1
 
 BooruGet is a **multi-booru downloader** with a bilingual German/English desktop interface. Ten built-in sources share reusable provider engines:
 
@@ -44,6 +44,7 @@ The Tkinter desktop application includes:
 - on-demand preview for the selected result
 - direct link to the original post
 - search-only / dry-run mode
+- separate **Download all (new search)** and **Download found** actions; the latter downloads exactly the visible result list without querying providers again
 - persistent search history and GUI settings
 - optional Danbooru and Gelbooru credentials
 - parallel downloads with retries, timeouts and atomic `.part` files
@@ -149,14 +150,14 @@ build_windows.bat
 The build produces:
 
 ```text
-release\BooruGet-2.6.0-win64\BooruGet.exe
-release\BooruGet-2.6.0-win64\BooruGet-CLI.exe
-release\BooruGet-2.6.0-win64.zip
+release\BooruGet-2.6.1-win64\BooruGet.exe
+release\BooruGet-2.6.1-win64\BooruGet-CLI.exe
+release\BooruGet-2.6.1-win64.zip
 ```
 
 The executables do not require a separate Python installation.
 
-The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.6.0` publish the ZIP as a GitHub Release.
+The repository also contains `.github/workflows/build-windows.yml`. Pushes to `master`, `main` and `modernize/**` run a Win64 build. Tags such as `v2.6.1` publish the ZIP as a GitHub Release.
 
 ## Download safety / reliability
 

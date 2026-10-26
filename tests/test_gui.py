@@ -29,6 +29,10 @@ class GUISafetyTests(unittest.TestCase):
         self.assertTrue(callable(BooruGetGUI._apply_language))
         self.assertTrue(callable(BooruGetGUI._show_about))
 
+    def test_separate_result_download_handler_exists(self):
+        self.assertTrue(callable(BooruGetGUI._listed_posts))
+        self.assertTrue(callable(BooruGetGUI._start_list_download))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -67,6 +67,7 @@ class BooruGetGUI(tk.Tk):
         self.image_viewer = None
         self.selected_post: Post | None = None
         self.last_destination: Path | None = None
+        self.result_options: SearchOptions | None = None
         self.presets: dict[str, dict] = {}
         self.style = ttk.Style(self)
         self.language = tk.StringVar(value="de")
@@ -457,16 +458,23 @@ class BooruGetGUI(tk.Tk):
         )
         self.start_btn = ttk.Button(
             controls,
-            text=self._t("button.start_download"),
+            text=self._t("button.download_all"),
             command=lambda: self._start(False),
         )
         self.start_btn.pack(side="left")
+        self.download_found_btn = ttk.Button(
+            controls,
+            text=self._t("button.download_found"),
+            command=self._start_list_download,
+            state="disabled",
+        )
+        self.download_found_btn.pack(side="left", padx=7)
         self.search_btn = ttk.Button(
             controls,
             text=self._t("button.search_only"),
             command=lambda: self._start(True),
         )
-        self.search_btn.pack(side="left", padx=7)
+        self.search_btn.pack(side="left")
         self.cancel_btn = ttk.Button(
             controls,
             text=self._t("button.cancel"),
@@ -1210,10 +1218,13 @@ class BooruGetGUI(tk.Tk):
         if not options:
             return
 
+        self._clear()
+        self.result_options = options
         self._save_settings()
         self.cancel_event.clear()
         self.progress.start(12)
         self.start_btn.configure(state="disabled")
+        self.download_found_btn.configure(state="disabled")
         self.search_btn.configure(state="disabled")
         self.cancel_btn.configure(state="normal")
         self._set_status(
@@ -1249,6 +1260,85 @@ class BooruGetGUI(tk.Tk):
             target=work,
             daemon=True,
         )
+        self.worker.start()
+
+    def _listed_posts(self) -> list[Post]:
+        return [
+            self.posts[item]
+            for item in self.queue_view.get_children()
+            if item in self.posts
+        ]
+
+    def _start_list_download(self) -> None:
+        if self.worker and self.worker.is_alive():
+            return
+
+        posts = self._listed_posts()
+        if not posts or self.result_options is None:
+            messagebox.showwarning(
+                self._t("dialog.warning_title"),
+                self._t("warning.no_results"),
+                parent=self,
+            )
+            return
+
+        try:
+            workers = max(1, min(16, int(self.workers.get())))
+        except ValueError:
+            messagebox.showerror(
+                self._t("dialog.error_title"),
+                self._t("error.integer_fields"),
+                parent=self,
+            )
+            return
+
+        base = self.result_options
+        options = SearchOptions(
+            tags=base.tags,
+            output_dir=(self.output.get().strip() or base.output_dir),
+            use_danbooru=base.use_danbooru,
+            use_gelbooru=base.use_gelbooru,
+            provider_ids=set(base.provider_ids) if base.provider_ids is not None else None,
+            any_size=base.any_size,
+            target_width=base.target_width,
+            target_height=base.target_height,
+            size_error=base.size_error,
+            allow_nsfw=base.allow_nsfw,
+            allowed_ratings=set(base.allowed_ratings) if base.allowed_ratings is not None else None,
+            max_results=base.max_results,
+            max_pages=base.max_pages,
+            workers=workers,
+            verbose=base.verbose,
+            dry_run=False,
+        )
+
+        self._save_settings()
+        self.cancel_event.clear()
+        self.progress.start(12)
+        self.start_btn.configure(state="disabled")
+        self.download_found_btn.configure(state="disabled")
+        self.search_btn.configure(state="disabled")
+        self.cancel_btn.configure(state="normal")
+        self._set_status("status.download_found")
+
+        def work():
+            try:
+                DownloadRunner(
+                    options,
+                    self._credentials(),
+                    log=lambda value: self.events.put(("log", value)),
+                    cancel_event=self.cancel_event,
+                    event_callback=lambda event, payload: (
+                        self.events.put((event, payload))
+                    ),
+                ).download_posts(posts)
+            except Exception as exc:
+                self.events.put(("log", f"ERROR: {exc}"))
+                self.events.put(("fatal", str(exc)))
+            finally:
+                self.events.put(("done", None))
+
+        self.worker = threading.Thread(target=work, daemon=True)
         self.worker.start()
 
     def _cancel(self) -> None:
@@ -1774,6 +1864,9 @@ class BooruGetGUI(tk.Tk):
                     self.start_btn.configure(
                         state="normal"
                     )
+                    self.download_found_btn.configure(
+                        state=("normal" if self.posts else "disabled")
+                    )
                     self.search_btn.configure(
                         state="normal"
                     )
@@ -1816,6 +1909,8 @@ class BooruGetGUI(tk.Tk):
         self.items.clear()
         self.posts.clear()
         self.item_status_keys.clear()
+        self.result_options = None
+        self.download_found_btn.configure(state="disabled")
         self.selected_post = None
         self.preview_key = ""
         self.preview_photo = None
