@@ -35,8 +35,22 @@ class I18nTests(unittest.TestCase):
     def test_core_gui_labels_are_translated(self):
         self.assertEqual(tr("de", "about.button"), "Über")
         self.assertEqual(tr("en", "about.button"), "About")
-        self.assertEqual(tr("de", "button.start_download"), "Download starten")
-        self.assertEqual(tr("en", "button.start_download"), "Start download")
+        self.assertEqual(
+            tr("de", "button.download_all"),
+            "Alle laden (neu suchen)",
+        )
+        self.assertEqual(
+            tr("en", "button.download_all"),
+            "Download all (new search)",
+        )
+        self.assertEqual(
+            tr("de", "button.download_found"),
+            "Gefundene laden",
+        )
+        self.assertEqual(
+            tr("en", "button.download_found"),
+            "Download found",
+        )
 
 
 if __name__ == "__main__":
