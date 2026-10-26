@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.6.1 – 2026-10-26
+
+- Split GUI downloading into two explicit actions: **Download all (new search)** and **Download found**.
+- **Download found** downloads exactly the posts already present in the visible result list and performs no provider search.
+- Starting a new search clears the previous result snapshot first, preventing old and newly queried results from being mixed.
+- The visible result snapshot keeps its original search/tag context for the download folder while honoring the currently selected output directory and worker count.
+- Added German/English UI strings and regression coverage for list-only downloading.
+
 ## 2.6.0 – 2026-10-19
 
 - Added a resizable original-image popup with Previous/Next and keyboard navigation.
